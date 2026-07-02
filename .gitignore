@@ -1,0 +1,24 @@
+# Flutter
+front-end/.env
+front-end/.dart_tool/
+front-end/build/
+
+# Node.js
+back-end/.env
+back-end/node_modules/
+back-end/logs/
+
+# Python
+ai/__pycache__/
+ai/.venv/
+ai/data/raw/         # datasets may be large
+
+# General
+.DS_Store
+
+# Editor/tooling state — .vscode/settings.json holds a plaintext DB
+# password (SQLTools connection config), and .idea/.claude are local
+# machine/session state, none of which belong in version control.
+.vscode/
+.idea/
+.claude/

@@ -2,10 +2,15 @@ class ApiEndpoints {
   // Testing on a physical Android phone over Wi-Fi, so we use the PC's LAN
   // IP address instead of the emulator-only alias 10.0.2.2. The phone and
   // PC must be on the same Wi-Fi network, and Windows Firewall must allow
-  // inbound connections on this port. If the PC's Wi-Fi IP changes (e.g.
-  // after reconnecting to Wi-Fi or a DHCP lease renewal), update this value
-  // — run `ipconfig` and look for the "Wi-Fi" adapter's IPv4 Address.
-  static const String baseUrl = 'http://192.168.100.10:3000';
+  // inbound connections on this port.
+  //
+  // The IP is passed in at build/run time via --dart-define=API_BASE_URL=...
+  // (see front-end/dart_defines.example.json) instead of being hardcoded, since
+  // it changes whenever the PC reconnects to Wi-Fi or gets a new DHCP lease.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.210.115.94:3000',
+  );
 
   static const String expenses = '$baseUrl/api/expenses';
   static const String auth = '$baseUrl/api/auth';
@@ -20,6 +25,7 @@ class ApiEndpoints {
 
   static String authRegister() => '$auth/register';
   static String authLogin() => '$auth/login';
+  static String authGuest() => '$auth/guest';
   static String authRequestPasswordReset() => '$auth/reset-password';
   static String authConfirmPasswordReset() => '$auth/reset-password/confirm';
   static String authFcmToken() => '$auth/fcm-token';

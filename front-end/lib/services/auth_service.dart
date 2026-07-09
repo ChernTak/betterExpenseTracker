@@ -70,6 +70,28 @@ class AuthService {
     }
   }
 
+  /// POST /api/auth/guest — creates a throwaway account and logs straight
+  /// into it, skipping the registration form entirely.
+  Future<Map<String, dynamic>> continueAsGuest() async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.authGuest()),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        await _storage.write(key: _tokenKey, value: body['token'] as String);
+        return body;
+      } else {
+        throw Exception(body['message'] ?? 'Failed to continue as guest');
+      }
+    } catch (e) {
+      throw Exception('Error continuing as guest: $e');
+    }
+  }
+
   /// POST /api/auth/reset-password — request a reset link be emailed.
   Future<String> requestPasswordReset(String email) async {
     try {

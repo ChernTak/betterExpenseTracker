@@ -58,6 +58,43 @@ exports.register = async (req, res) => {
   }
 };
 
+// "Continue as Guest" — skips the registration form entirely by creating a
+// throwaway account behind the scenes and logging straight into it, so the
+// rest of the app (which expects a real JWT/user_id everywhere) needs no
+// special-casing for guests.
+exports.guestLogin = async (req, res) => {
+  try {
+    const suffix = crypto.randomBytes(6).toString('hex');
+    const email = `guest_${suffix}@guest.local`;
+    const username = `Guest${suffix.slice(0, 6)}`;
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS);
+
+    const result = await userModel.createGuestUser({ email, username, passwordHash });
+    const user = result.rows[0];
+
+    const token = jwt.sign(
+      { userId: user.user_id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(200).json({
+      message: 'Continuing as guest',
+      token,
+      user: {
+        userId: user.user_id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        isGuest: true,
+      },
+    });
+  } catch (err) {
+    console.error('Guest login error', err);
+    return res.status(500).json({ message: 'Failed to continue as guest', error: err.message });
+  }
+};
+
 exports.login = async (req, res) => {
   const { email, password } = req.body;
 

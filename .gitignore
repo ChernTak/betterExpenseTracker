@@ -2,6 +2,8 @@
 front-end/.env
 front-end/.dart_tool/
 front-end/build/
+front-end/dart_defines.wifi.json
+front-end/dart_defines.usb.json
 
 # Node.js
 back-end/.env
@@ -11,7 +13,15 @@ back-end/logs/
 # Python
 ai/__pycache__/
 ai/.venv/
-ai/data/raw/         # datasets may be large
+
+# Datasets and trained model artifacts get large fast and are
+# regenerable, so only the folder structure (.gitkeep) is tracked.
+ai/data/raw/*
+!ai/data/raw/.gitkeep
+ai/data/processed/*
+!ai/data/processed/.gitkeep
+ai/models/*
+!ai/models/.gitkeep
 
 # General
 .DS_Store

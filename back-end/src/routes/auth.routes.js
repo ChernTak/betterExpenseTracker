@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth.middleware');
 
 router.post('/register', authService.register);
 router.post('/login', authService.login);
+router.post('/guest', authService.guestLogin);
 router.post('/reset-password', authService.requestPasswordReset);
 router.post('/reset-password/confirm', authService.confirmPasswordReset);
 router.put('/fcm-token', authMiddleware, authService.updateFcmToken);

@@ -67,6 +67,24 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleGuestLogin() async {
+    setState(() => _isLoading = true);
+    try {
+      await _authService.continueAsGuest();
+      unawaited(FcmService().registerToken());
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.main);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _handleRegister() async {
     setState(() => _isLoading = true);
     try {
@@ -227,7 +245,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _isLoading ? null : _handleGuestLogin,
+                  child: const Text('Continue as Guest', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 8),
                 Text.rich(
                   TextSpan(
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),

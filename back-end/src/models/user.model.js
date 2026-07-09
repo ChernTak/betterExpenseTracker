@@ -21,6 +21,18 @@ exports.createUser = ({ email, username, passwordHash, mobileNumber }) => {
   return db.query(query, [email, username, passwordHash, mobileNumber || null]);
 };
 
+// "Continue as Guest" — a real user row with a generated email/password,
+// so every existing feature (expenses, budgets, FCM alerts) works unchanged
+// without the user creating an account first.
+exports.createGuestUser = ({ email, username, passwordHash }) => {
+  const query = `
+    INSERT INTO users (email, username, password_hash, is_guest)
+    VALUES ($1, $2, $3, TRUE)
+    RETURNING user_id, email, username, role, is_guest, created_at
+  `;
+  return db.query(query, [email, username, passwordHash]);
+};
+
 // Increments the failed-login counter and locks the account for 30 minutes
 // once it reaches 5 (FR1.4).
 exports.incrementFailedLogin = (userId) => {

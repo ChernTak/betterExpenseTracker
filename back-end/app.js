@@ -22,3 +22,12 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);
 });
+
+// Warm up the embedding model and category embeddings in the background so
+// the first /api/expenses/categorize call that needs the embedding fallback
+// isn't the one paying for the model download/load.
+const embeddingService = require('./src/services/embedding.service');
+embeddingService
+  .preload()
+  .then(() => console.log('Category embedding model ready'))
+  .catch((err) => console.error('Failed to preload embedding model', err));

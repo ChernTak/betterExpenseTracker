@@ -18,6 +18,7 @@ class ApiEndpoints {
   static const String ocr = '$baseUrl/api/ocr';
 
   static String expenseCreate() => '$expenses/post';
+  static String expenseCategorize() => '$expenses/categorize';
   static String expenseFetchAll() => '$expenses/fetch';
   static String expenseById(String id) => '$expenses/$id';
   static String expenseUpdate(String id) => '$expenses/update/$id';

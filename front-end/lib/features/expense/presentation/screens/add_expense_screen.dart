@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -5,6 +7,7 @@ import '../../../../core/constants/expense_categories.dart';
 import '../../../../core/events/expense_events.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/labeled_field.dart';
+import '../../../../services/auto_categorization_service.dart';
 import '../../../../services/camera_service.dart';
 import '../../../../services/expense_service.dart';
 import '../../../../services/ocr_service.dart';
@@ -33,15 +36,28 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _cameraService = CameraService();
   final _ocrDatasource = OcrDatasource();
   final _ocrService = OcrService();
+  final _autoCategorizationService = AutoCategorizationService();
 
   String _category = kExpenseCategories.first;
   String? _paymentMethod;
   DateTime _transactionDate = DateTime.now();
   bool _isSaving = false;
 
+  // True while the current _category is an auto-suggestion rather than an
+  // explicit user pick, so we know whether the next chip tap is a
+  // "correction" worth caching (AutoCategorizationService.recordCorrection).
+  bool _categorySuggested = false;
+
   // Set once a scanned receipt is parsed, so _handleSave can link the
   // ocr_receipts audit row to the expense once the user confirms it.
   String? _receiptId;
+
+  // Backend's subtotal+tax+rounding cross-check (FR4.3) on the last scanned
+  // receipt. null = not checked, or the receipt didn't itemize enough to
+  // validate; false = the printed total didn't reconcile with its own parts,
+  // so _MathMismatchBanner prompts the user to double-check before saving.
+  bool? _isMathValid;
+  double? _computedTotal;
 
   String _inputMode = 'manual';
 
@@ -56,7 +72,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   Future<void> _handleScanReceipt() async {
     setState(() => _inputMode = 'scan');
     try {
-      final imagePath = await _cameraService.captureReceiptPhoto();
+      // ML Kit's document scanner (bounding-box edge detection, perspective
+      // correction, cropping, auto-rotation) only ships an Android
+      // implementation — iOS/macOS/etc. fall back to the plain camera
+      // capture so Scan still works everywhere, just without those extras.
+      final imagePath = Platform.isAndroid
+          ? (await _ocrDatasource.scanDocument())?.path
+          : await _cameraService.captureReceiptPhoto();
       if (imagePath == null) {
         if (mounted) setState(() => _inputMode = 'manual');
         return;
@@ -72,19 +94,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       final parsed = await _ocrService.parseReceipt(rawText);
       if (!mounted) return;
 
+      String? scannedMerchant;
       setState(() {
         _receiptId = parsed['receiptId'] as String?;
         final merchant = parsed['merchant'] as String?;
         if (merchant != null && merchant.isNotEmpty) {
           _merchantController.text = merchant;
+          scannedMerchant = merchant;
         }
         final amount = parsed['amount'] as num?;
         if (amount != null) _amountController.text = amount.toStringAsFixed(2);
         final date = parsed['date'] as String?;
         final parsedDate = date != null ? DateTime.tryParse(date) : null;
         if (parsedDate != null) _transactionDate = parsedDate;
+        _isMathValid = parsed['isMathValid'] as bool?;
+        final computedTotal = parsed['computedTotal'];
+        _computedTotal = computedTotal is num ? computedTotal.toDouble() : null;
         _inputMode = 'manual';
       });
+      if (scannedMerchant != null) {
+        _suggestCategory(scannedMerchant!, inputSource: 'ocr');
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Receipt scanned — review the details before saving.'),
@@ -97,6 +127,42 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     }
+  }
+
+  /// Asks AutoCategorizationService to suggest a category for [merchantText]
+  /// (cache-first, keyword-first, embedding-fallback) and, if still on this
+  /// screen, updates the selected chip to match.
+  Future<void> _suggestCategory(
+    String merchantText, {
+    required String inputSource,
+  }) async {
+    if (merchantText.trim().isEmpty) return;
+    final suggestion = await _autoCategorizationService.categorize(
+      merchantText,
+      source: inputSource,
+    );
+    if (!mounted) return;
+    setState(() {
+      _category = suggestion.category;
+      _categorySuggested = true;
+    });
+  }
+
+  void _applyComputedTotal() {
+    final computedTotal = _computedTotal;
+    if (computedTotal == null) return;
+    setState(() {
+      _amountController.text = computedTotal.toStringAsFixed(2);
+      _isMathValid = null;
+      _computedTotal = null;
+    });
+  }
+
+  void _dismissMathMismatch() {
+    setState(() {
+      _isMathValid = null;
+      _computedTotal = null;
+    });
   }
 
   Future<void> _pickDate() async {
@@ -135,9 +201,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         _amountController.clear();
         _merchantController.clear();
         _category = kExpenseCategories.first;
+        _categorySuggested = false;
         _paymentMethod = null;
         _transactionDate = DateTime.now();
         _receiptId = null;
+        _isMathValid = null;
+        _computedTotal = null;
       });
       widget.onSaved?.call();
     } catch (e) {
@@ -206,6 +275,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               )
             else ...[
+              if (_isMathValid == false && _computedTotal != null) ...[
+                _MathMismatchBanner(
+                  computedTotal: _computedTotal!,
+                  onUseSuggested: _applyComputedTotal,
+                  onDismiss: _dismissMathMismatch,
+                ),
+                const SizedBox(height: 20),
+              ],
               LabeledField(
                 label: 'Transaction Amount',
                 child: TextFormField(
@@ -241,7 +318,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         color: selected ? Colors.white : categoryColor(c),
                       ),
                       selected: selected,
-                      onSelected: (_) => setState(() => _category = c),
+                      onSelected: (_) {
+                        // A tap on a different chip while the current
+                        // category is still an unconfirmed suggestion means
+                        // the user is fixing it — worth caching so this
+                        // merchant categorizes correctly next time.
+                        if (_categorySuggested &&
+                            c != _category &&
+                            _merchantController.text.trim().isNotEmpty) {
+                          _autoCategorizationService.recordCorrection(
+                            _merchantController.text,
+                            c,
+                          );
+                        }
+                        setState(() {
+                          _category = c;
+                          _categorySuggested = false;
+                        });
+                      },
                       selectedColor: AppColors.primary,
                       backgroundColor: AppColors.surface,
                       labelStyle: TextStyle(
@@ -263,6 +357,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   decoration: const InputDecoration(
                     hintText: 'Where did you spend?',
                   ),
+                  onFieldSubmitted: (value) =>
+                      _suggestCategory(value, inputSource: 'manual'),
                 ),
               ),
               const SizedBox(height: 20),
@@ -351,6 +447,71 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shown after a scan when the backend's subtotal+tax+rounding cross-check
+/// (FR4.3) didn't reconcile with the printed total — a misread digit or a
+/// missed tax line is a likely cause, so this surfaces the reconciled
+/// figure as a one-tap fix rather than silently trusting either number.
+class _MathMismatchBanner extends StatelessWidget {
+  final double computedTotal;
+  final VoidCallback onUseSuggested;
+  final VoidCallback onDismiss;
+
+  const _MathMismatchBanner({
+    required this.computedTotal,
+    required this.onUseSuggested,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.warning,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "The subtotal, tax and rounding on this receipt don't add "
+                  'up to the printed total — double-check the amount before '
+                  'saving.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: onDismiss,
+                child: const Text('Keep scanned total'),
+              ),
+              TextButton(
+                onPressed: onUseSuggested,
+                child: Text('Use RM ${computedTotal.toStringAsFixed(2)}'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

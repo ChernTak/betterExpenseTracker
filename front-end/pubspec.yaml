@@ -46,6 +46,11 @@ dependencies:
   # FR4.2/FR4.3 — receipt photo capture and on-device OCR (Google ML Kit)
   image_picker: ^1.1.2
   google_mlkit_text_recognition: ^0.15.0
+  google_mlkit_document_scanner: ^0.4.0
+
+  # Local vendor->category cache for auto-categorization (sqflite DB)
+  sqflite: ^2.4.1
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

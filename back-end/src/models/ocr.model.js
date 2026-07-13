@@ -2,13 +2,22 @@ const db = require('../config/db');
 
 // FR4.3 — audit trail of what OCR extracted, regardless of whether the user
 // kept the parsed values or edited them before saving.
-exports.insertReceipt = ({ userId, rawText, merchant, amount, date, confidence }) => {
+exports.insertReceipt = ({
+  userId,
+  rawText,
+  merchant,
+  amount,
+  date,
+  confidence,
+  isMathValid,
+  computedTotal,
+}) => {
   const query = `
-    INSERT INTO ocr_receipts (user_id, raw_text, extracted_merchant, extracted_amount, extracted_date, confidence)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO ocr_receipts (user_id, raw_text, extracted_merchant, extracted_amount, extracted_date, confidence, is_math_valid, computed_total)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *
   `;
-  return db.query(query, [userId, rawText, merchant, amount, date, confidence]);
+  return db.query(query, [userId, rawText, merchant, amount, date, confidence, isMathValid, computedTotal]);
 };
 
 // Called once the user confirms the scanned receipt and saves it as an

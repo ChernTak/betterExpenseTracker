@@ -151,4 +151,52 @@ const KEYWORD_MAP = {
   asnb: 'investment',
 };
 
-module.exports = { CATEGORIES, CATEGORY_DESCRIPTIONS, KEYWORD_MAP };
+// Seeded into a user's own `categories` row set at signup (see
+// category.model.js#seedDefaultsForUser) — icon/color match what
+// expense_categories.dart's old hardcoded switch statements used to render,
+// so seeded defaults look identical to what existed before this feature.
+// `other` is the only protected (undeletable) category: every category
+// delete reassigns that category's expenses to `other`, so there must
+// always be a safe landing spot.
+const DEFAULT_CATEGORIES = [
+  { key: 'food_dining', label: 'Food Dining', icon: 'restaurant', color: '#E58A3B' },
+  { key: 'transport', label: 'Transport', icon: 'directions_bus', color: '#3B82C4' },
+  { key: 'shopping', label: 'Shopping', icon: 'shopping_bag', color: '#9B59B6' },
+  { key: 'groceries', label: 'Groceries', icon: 'local_grocery_store', color: '#2FA84F' },
+  { key: 'entertainment', label: 'Entertainment', icon: 'movie', color: '#D64545' },
+  { key: 'health_medical', label: 'Health Medical', icon: 'medical_services', color: '#35A79C' },
+  { key: 'utilities', label: 'Utilities', icon: 'bolt', color: '#B8860B' },
+  { key: 'education', label: 'Education', icon: 'school', color: '#4C6EF5' },
+  { key: 'travel', label: 'Travel', icon: 'flight', color: '#00A8A8' },
+  { key: 'personal_care', label: 'Personal Care', icon: 'spa', color: '#E066A6' },
+  { key: 'subscription', label: 'Subscription', icon: 'subscriptions', color: '#7C6EF5' },
+  { key: 'investment', label: 'Investment', icon: 'trending_up', color: '#12463A' },
+  { key: 'other', label: 'Other', icon: 'receipt_long', color: '#8B8F97', isProtected: true },
+];
+
+// Must match the frontend's kCategoryIconPresets keys exactly (front-end/lib/
+// core/constants/category_presets.dart) — validated against on create/update
+// so a category can never be saved with an icon key the app can't render.
+const ICON_PRESET_KEYS = [
+  'restaurant', 'directions_bus', 'shopping_bag', 'local_grocery_store', 'movie',
+  'medical_services', 'bolt', 'school', 'flight', 'spa', 'subscriptions', 'trending_up',
+  'receipt_long', 'pets', 'home', 'fitness_center', 'card_giftcard', 'directions_car',
+  'local_cafe', 'phone_android', 'child_care', 'sports_esports', 'savings', 'checkroom',
+  'build', 'pool', 'local_bar', 'cake', 'park', 'work', 'favorite', 'star', 'category',
+];
+
+// Same idea as ICON_PRESET_KEYS, for the color swatch grid.
+const COLOR_PRESETS = [
+  '#E58A3B', '#3B82C4', '#9B59B6', '#2FA84F', '#D64545', '#35A79C', '#B8860B',
+  '#4C6EF5', '#00A8A8', '#E066A6', '#7C6EF5', '#12463A', '#8B8F97', '#FF6F61',
+  '#6B8E23', '#C2185B', '#009688', '#5D4037', '#455A64', '#FFA000',
+];
+
+module.exports = {
+  CATEGORIES,
+  CATEGORY_DESCRIPTIONS,
+  KEYWORD_MAP,
+  DEFAULT_CATEGORIES,
+  ICON_PRESET_KEYS,
+  COLOR_PRESETS,
+};

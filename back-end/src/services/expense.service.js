@@ -1,8 +1,9 @@
 const expenseModel = require('../models/expense.model');
 const budgetService = require('./budget.service');
 const ocrModel = require('../models/ocr.model');
+const categoryModel = require('../models/category.model');
 
-exports.postData = (req, res) => {
+exports.postData = async (req, res) => {
   const userId = req.user.userId;
   const { amount, category, merchant_name, description, payment_method, transaction_date, receipt_id } = req.body;
 
@@ -10,6 +11,14 @@ exports.postData = (req, res) => {
     return res.status(400).json({
       message: 'amount and category are required'
     });
+  }
+
+  // category used to be a fixed ENUM the DB validated automatically; it's
+  // now a per-user table, so the app layer has to check it belongs to this
+  // user before writing an expense for it.
+  const categoryExists = await categoryModel.findByUserAndKey(userId, category);
+  if (categoryExists.rows.length === 0) {
+    return res.status(400).json({ message: `Unknown category: ${category}` });
   }
 
   expenseModel.createExpense(
@@ -110,7 +119,7 @@ exports.deleteData = (req, res) => {
   });
 };
 
-exports.updateData = (req, res) => {
+exports.updateData = async (req, res) => {
   const { id } = req.params;
   const {
     amount,
@@ -120,6 +129,13 @@ exports.updateData = (req, res) => {
     payment_method,
     transaction_date
   } = req.body;
+
+  if (category) {
+    const categoryExists = await categoryModel.findByUserAndKey(req.user.userId, category);
+    if (categoryExists.rows.length === 0) {
+      return res.status(400).json({ message: `Unknown category: ${category}` });
+    }
+  }
 
   expenseModel.updateExpenseById(
     id,

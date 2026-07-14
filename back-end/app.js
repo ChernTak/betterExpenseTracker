@@ -18,6 +18,9 @@ app.use('/api/budgets', budgetRoutes);
 const ocrRoutes = require('./src/routes/ocr.routes');
 app.use('/api/ocr', ocrRoutes);
 
+const categoryRoutes = require('./src/routes/category.routes');
+app.use('/api/categories', categoryRoutes);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);

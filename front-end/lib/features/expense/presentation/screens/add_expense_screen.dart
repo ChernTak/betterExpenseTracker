@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/expense_categories.dart';
+import '../../../../core/events/category_events.dart';
 import '../../../../core/events/expense_events.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/labeled_field.dart';
 import '../../../../services/auto_categorization_service.dart';
 import '../../../../services/camera_service.dart';
+import '../../../../services/category_service.dart';
 import '../../../../services/expense_service.dart';
 import '../../../../services/ocr_service.dart';
 import '../../data/datasources/ocr_datasource.dart';
@@ -38,7 +40,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _ocrService = OcrService();
   final _autoCategorizationService = AutoCategorizationService();
 
-  String _category = kExpenseCategories.first;
+  List<CategoryItem> _categories = CategoryService.cached;
+  String _category = CategoryService.cached.isNotEmpty ? CategoryService.cached.first.key : 'other';
   String? _paymentMethod;
   DateTime _transactionDate = DateTime.now();
   bool _isSaving = false;
@@ -61,12 +64,36 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   String _inputMode = 'manual';
 
+  final _categoryService = CategoryService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+    categoriesChanged.addListener(_loadCategories);
+  }
+
   @override
   void dispose() {
+    categoriesChanged.removeListener(_loadCategories);
     _amountController.dispose();
     _merchantController.dispose();
     _ocrDatasource.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await _categoryService.fetchCategories();
+    if (!mounted) return;
+    setState(() {
+      _categories = categories;
+      // The previously selected category may no longer exist (e.g. deleted
+      // from Manage Categories while this screen was open) — fall back to
+      // the first available one rather than leaving a stale chip selected.
+      if (categories.isNotEmpty && !categories.any((c) => c.key == _category)) {
+        _category = categories.first.key;
+      }
+    });
   }
 
   Future<void> _handleScanReceipt() async {
@@ -200,7 +227,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       setState(() {
         _amountController.clear();
         _merchantController.clear();
-        _category = kExpenseCategories.first;
+        _category = _categories.isNotEmpty ? _categories.first.key : 'other';
         _categorySuggested = false;
         _paymentMethod = null;
         _transactionDate = DateTime.now();
@@ -308,14 +335,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: kExpenseCategories.map((c) {
-                    final selected = c == _category;
+                  children: _categories.map((c) {
+                    final selected = c.key == _category;
                     return ChoiceChip(
-                      label: Text(formatCategoryLabel(c)),
+                      label: Text(c.label),
                       avatar: Icon(
-                        categoryIcon(c),
+                        c.icon,
                         size: 18,
-                        color: selected ? Colors.white : categoryColor(c),
+                        color: selected ? Colors.white : c.color,
                       ),
                       selected: selected,
                       onSelected: (_) {
@@ -324,15 +351,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         // the user is fixing it — worth caching so this
                         // merchant categorizes correctly next time.
                         if (_categorySuggested &&
-                            c != _category &&
+                            c.key != _category &&
                             _merchantController.text.trim().isNotEmpty) {
                           _autoCategorizationService.recordCorrection(
                             _merchantController.text,
-                            c,
+                            c.key,
                           );
                         }
                         setState(() {
-                          _category = c;
+                          _category = c.key;
                           _categorySuggested = false;
                         });
                       },

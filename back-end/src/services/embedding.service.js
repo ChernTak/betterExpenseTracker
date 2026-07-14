@@ -46,13 +46,41 @@ function getCategoryEmbeddings() {
   return categoryEmbeddingsPromise;
 }
 
+// A custom category (added via Manage Categories) has no entry in
+// CATEGORY_DESCRIPTIONS, so without this it could never be the winner of
+// the embedding comparison below no matter how well its keywords/label
+// matched the merchant text. Keyed by category_id (globally unique, unlike
+// `key` which is only unique per-user) rather than the fixed defaults'
+// startup-computed map, since these are created/edited/deleted at runtime.
+// Cache invalidation is just "recompute if the text changed" — cheap
+// (single sentence embed) and avoids needing an explicit eviction path;
+// unbounded growth over a server's lifetime is fine at this app's scale.
+const customCategoryEmbeddingCache = new Map();
+async function getCustomCategoryEmbedding(categoryId, text) {
+  const cached = customCategoryEmbeddingCache.get(categoryId);
+  if (cached && cached.text === text) return cached.embedding;
+
+  const embedding = await embed(text);
+  customCategoryEmbeddingCache.set(categoryId, { text, embedding });
+  return embedding;
+}
+
 // Embeds the (already keyword-normalized) merchant text and returns the
-// category description it's closest to, with the similarity score used
-// directly as the confidence.
-async function classifyByEmbedding(normalizedText) {
-  const [textEmbedding, categoryEmbeddings] = await Promise.all([
+// category description/custom-category text it's closest to, with the
+// similarity score used directly as the confidence. customCategories is
+// `{ id, key, text }[]` — the caller's own (non-default) categories, text
+// being their keywords if set or their label otherwise (see
+// categorization.service.js).
+async function classifyByEmbedding(normalizedText, customCategories = []) {
+  const [textEmbedding, categoryEmbeddings, customEmbeddings] = await Promise.all([
     embed(normalizedText),
     getCategoryEmbeddings(),
+    Promise.all(
+      customCategories.map(async ({ id, key, text }) => ({
+        key,
+        embedding: await getCustomCategoryEmbedding(id, text),
+      })),
+    ),
   ]);
 
   let bestCategory = 'other';
@@ -62,6 +90,13 @@ async function classifyByEmbedding(normalizedText) {
     if (score > bestScore) {
       bestScore = score;
       bestCategory = category;
+    }
+  }
+  for (const { key, embedding } of customEmbeddings) {
+    const score = cosineSimilarity(textEmbedding, embedding);
+    if (score > bestScore) {
+      bestScore = score;
+      bestCategory = key;
     }
   }
   return { category: bestCategory, confidence: bestScore };

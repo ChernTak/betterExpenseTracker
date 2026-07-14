@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/expense_categories.dart';
+import '../../../../core/events/category_events.dart';
 import '../../../../core/events/expense_events.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../services/budget_service.dart';
+import '../../../../services/category_service.dart';
+import '../../../categories/presentation/screens/manage_categories_screen.dart';
 
 /// The "Budgets" tab: a progress tile per category budget (FR3.1-FR3.4) and
 /// the most recent 60/75/90% threshold alerts (FR3.5).
@@ -24,11 +26,13 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     super.initState();
     _dataFuture = _loadData();
     expenseDataChanged.addListener(_refresh);
+    categoriesChanged.addListener(_refresh);
   }
 
   @override
   void dispose() {
     expenseDataChanged.removeListener(_refresh);
+    categoriesChanged.removeListener(_refresh);
     super.dispose();
   }
 
@@ -72,6 +76,10 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     }
   }
 
+  Future<void> _openManageCategories() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -110,6 +118,11 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.tune, color: AppColors.textSecondary),
+                    tooltip: 'Manage Categories',
+                    onPressed: _openManageCategories,
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
@@ -167,6 +180,7 @@ class _CategoryBudgetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final category = budget['category'] as String? ?? '';
+    final categoryItem = CategoryService.lookup(category);
     final limit = (budget['monthly_limit'] as num?)?.toDouble() ?? 0;
     final spent = (budget['current_spend'] as num?)?.toDouble() ?? 0;
     final pct = (budget['utilization_pct'] as num?)?.toDouble() ?? 0;
@@ -192,13 +206,13 @@ class _CategoryBudgetTile extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: categoryColor(category).withValues(alpha: 0.15),
-                    child: Icon(categoryIcon(category), color: categoryColor(category), size: 16),
+                    backgroundColor: categoryItem.color.withValues(alpha: 0.15),
+                    child: Icon(categoryItem.icon, color: categoryItem.color, size: 16),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      formatCategoryLabel(category),
+                      categoryItem.label,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -297,7 +311,8 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
   @override
   void initState() {
     super.initState();
-    _category = widget.category ?? kExpenseCategories.first;
+    final cachedCategories = CategoryService.cached;
+    _category = widget.category ?? (cachedCategories.isNotEmpty ? cachedCategories.first.key : 'other');
     _limitController = TextEditingController(
       text: widget.initialLimit != null ? widget.initialLimit!.toStringAsFixed(2) : '',
     );
@@ -335,7 +350,7 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isEditing ? 'Edit ${formatCategoryLabel(_category)} Budget' : 'Set Monthly Budget'),
+      title: Text(_isEditing ? 'Edit ${CategoryService.lookup(_category).label} Budget' : 'Set Monthly Budget'),
       content: Form(
         key: _formKey,
         child: Column(
@@ -346,11 +361,11 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
                 initialValue: _category,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Category'),
-                items: kExpenseCategories
+                items: CategoryService.cached
                     .map(
                       (c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(formatCategoryLabel(c), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        value: c.key,
+                        child: Text(c.label, maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     )
                     .toList(),

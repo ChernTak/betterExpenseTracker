@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/expense_categories.dart';
+import '../../../../core/events/category_events.dart';
 import '../../../../core/events/expense_events.dart';
 import '../../../../services/budget_service.dart';
+import '../../../../services/category_service.dart';
 import '../../../../services/expense_service.dart';
 import '../../../expense/presentation/screens/expense_list_screen.dart';
 
@@ -28,11 +29,13 @@ class _GuideScreenState extends State<GuideScreen> {
     super.initState();
     _dataFuture = _loadData();
     expenseDataChanged.addListener(_refresh);
+    categoriesChanged.addListener(_refresh);
   }
 
   @override
   void dispose() {
     expenseDataChanged.removeListener(_refresh);
+    categoriesChanged.removeListener(_refresh);
     super.dispose();
   }
 
@@ -231,7 +234,7 @@ class _InsightCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Biggest category this month: ${formatCategoryLabel(top['category'] as String)} '
+              'Biggest category this month: ${CategoryService.lookup(top['category'] as String).label} '
               '— RM ${spent.toStringAsFixed(2)} spent.',
               style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
             ),
@@ -250,6 +253,7 @@ class _ActivityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final category = expense['category'] as String? ?? 'other';
+    final categoryItem = CategoryService.lookup(category);
     final amount = (expense['amount'] as num?)?.toDouble() ?? 0;
     final title = (expense['merchant_name'] as String?)?.trim();
 
@@ -259,8 +263,8 @@ class _ActivityTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: categoryColor(category).withValues(alpha: 0.15),
-            child: Icon(categoryIcon(category), color: categoryColor(category), size: 20),
+            backgroundColor: categoryItem.color.withValues(alpha: 0.15),
+            child: Icon(categoryItem.icon, color: categoryItem.color, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -268,7 +272,7 @@ class _ActivityTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  (title != null && title.isNotEmpty) ? title : formatCategoryLabel(category),
+                  (title != null && title.isNotEmpty) ? title : categoryItem.label,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

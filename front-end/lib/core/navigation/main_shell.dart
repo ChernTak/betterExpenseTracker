@@ -4,6 +4,7 @@ import '../../features/ai_insights/presentation/screens/ai_insights_screen.dart'
 import '../../features/budget/presentation/screens/budgets_screen.dart';
 import '../../features/budget/presentation/screens/guide_screen.dart';
 import '../../features/expense/presentation/screens/add_expense_screen.dart';
+import '../../services/category_service.dart';
 
 /// The post-login app shell: a single Scaffold hosting the four bottom-nav
 /// tabs (Guide/Input/Budgets/Insights) from the design, each kept alive in
@@ -19,6 +20,15 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
 
   static const _titles = ['Sovereign Guide', 'Add Expense', 'Budgets', 'Insights'];
+
+  @override
+  void initState() {
+    super.initState();
+    // Warm CategoryService's static cache before any tab first renders, so
+    // the very first icon/color/label lookup doesn't fall back to a generic
+    // placeholder while the network request is still in flight.
+    CategoryService().fetchCategories();
+  }
 
   void _goToGuide() => setState(() => _index = 0);
 

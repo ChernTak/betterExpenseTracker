@@ -21,6 +21,12 @@ app.use('/api/ocr', ocrRoutes);
 const categoryRoutes = require('./src/routes/category.routes');
 app.use('/api/categories', categoryRoutes);
 
+const insightRoutes = require('./src/routes/insight.routes');
+app.use('/api/insights', insightRoutes);
+
+const incomeRoutes = require('./src/routes/income.routes');
+app.use('/api/income', incomeRoutes);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);

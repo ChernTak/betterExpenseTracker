@@ -16,8 +16,12 @@ class ApiEndpoints {
   static const String auth = '$baseUrl/api/auth';
   static const String budgets = '$baseUrl/api/budgets';
   static const String ocr = '$baseUrl/api/ocr';
+  static const String categories = '$baseUrl/api/categories';
+  static const String insights = '$baseUrl/api/insights';
+  static const String income = '$baseUrl/api/income';
 
   static String expenseCreate() => '$expenses/post';
+  static String expenseCategorize() => '$expenses/categorize';
   static String expenseFetchAll() => '$expenses/fetch';
   static String expenseById(String id) => '$expenses/$id';
   static String expenseUpdate(String id) => '$expenses/update/$id';
@@ -40,7 +44,20 @@ class ApiEndpoints {
 
   static String budgetUpdate(String id) => '$budgets/$id';
   static String budgetDelete(String id) => '$budgets/$id';
-  static String budgetAlerts({int limit = 20}) => '$budgets/alerts?limit=$limit';
+  static String budgetAlerts({int limit = 20}) =>
+      '$budgets/alerts?limit=$limit';
 
   static String ocrParse() => '$ocr/parse';
+
+  static String categoryUpdate(String id) => '$categories/$id';
+  static String categoryDelete(String id) => '$categories/$id';
+  static String categoryReorder() => '$categories/reorder';
+
+  static String insightsForecast() => '$insights/forecast';
+  static String insightsPredictions() => '$insights/predictions';
+  static String insightsModelVersion() => '$insights/model/version';
+  static String insightsModelFile() => '$insights/model/file';
+
+  static String incomeUpdate(String id) => '$income/$id';
+  static String incomeDelete(String id) => '$income/$id';
 }

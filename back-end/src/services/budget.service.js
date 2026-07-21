@@ -1,14 +1,8 @@
 const budgetModel = require('../models/budget.model');
 const alertModel = require('../models/alert.mode');
 const userModel = require('../models/user.model');
+const categoryModel = require('../models/category.model');
 const { sendPushNotification } = require('../utils/pushNotifier');
-
-// Matches the expense_category enum (000_extensions_enums.sql)
-const VALID_CATEGORIES = [
-  'food_dining', 'transport', 'shopping', 'groceries', 'entertainment',
-  'health_medical', 'utilities', 'education', 'travel', 'personal_care',
-  'subscription', 'investment', 'other',
-];
 
 function currentMonthYear() {
   const now = new Date();
@@ -19,8 +13,8 @@ function currentMonthYear() {
 exports.createBudget = async (req, res) => {
   const { category, monthlyLimit, alertThreshold } = req.body;
 
-  if (!category || !VALID_CATEGORIES.includes(category)) {
-    return res.status(400).json({ message: `category must be one of: ${VALID_CATEGORIES.join(', ')}` });
+  if (!category) {
+    return res.status(400).json({ message: 'category is required' });
   }
   const limit = Number(monthlyLimit);
   if (!Number.isFinite(limit) || limit <= 0) {
@@ -32,6 +26,14 @@ exports.createBudget = async (req, res) => {
   const targetYear = Number(req.body.year) || year;
 
   try {
+    // category used to be a fixed ENUM the DB validated automatically; it's
+    // now a per-user table, so the app layer has to check it belongs to
+    // this user before writing a budget for it.
+    const categoryExists = await categoryModel.findByUserAndKey(req.user.userId, category);
+    if (categoryExists.rows.length === 0) {
+      return res.status(400).json({ message: `Unknown category: ${category}` });
+    }
+
     const result = await budgetModel.upsertBudget({
       userId: req.user.userId,
       category,

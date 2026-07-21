@@ -1,3 +1,9 @@
 pandas
 scikit-learn
 joblib
+faker
+numpy
+tensorflow
+holidays
+psycopg2-binary
+python-dotenv

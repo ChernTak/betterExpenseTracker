@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const userModel = require('../models/user.model');
+const categoryModel = require('../models/category.model');
 const passwordResetModel = require('../models/passwordReset.model');
 const { sendPasswordResetEmail } = require('../utils/mailer');
 
@@ -47,6 +48,7 @@ exports.register = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const result = await userModel.createUser({ email, username, passwordHash, mobileNumber });
+    await categoryModel.seedDefaultsForUser(result.rows[0].user_id);
 
     return res.status(201).json({
       message: 'Registration successful',
@@ -71,6 +73,7 @@ exports.guestLogin = async (req, res) => {
 
     const result = await userModel.createGuestUser({ email, username, passwordHash });
     const user = result.rows[0];
+    await categoryModel.seedDefaultsForUser(user.user_id);
 
     const token = jwt.sign(
       { userId: user.user_id, email: user.email, role: user.role },

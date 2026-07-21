@@ -23,6 +23,11 @@ ai/data/processed/*
 ai/models/*
 !ai/models/.gitkeep
 
+# Copy of the trained Tier B model Flutter actually bundles (see
+# ai/train_tier_b.py) — same regenerable-artifact reasoning as ai/models/ above.
+front-end/assets/models/*
+!front-end/assets/models/.gitkeep
+
 # General
 .DS_Store
 

@@ -70,5 +70,7 @@
 	<string>Used to capture a photo of a receipt for OCR scanning.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to pick a receipt photo from your library for OCR scanning.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Used to find nearby food options within your remaining dining budget.</string>
 </dict>
 </plist>

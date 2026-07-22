@@ -30,6 +30,9 @@ app.use('/api/income', incomeRoutes);
 const adminRoutes = require('./src/routes/admin.routes');
 app.use('/api/admin', adminRoutes);
 
+const recommendationRoutes = require('./src/routes/recommendation.routes');
+app.use('/api/recommendations', recommendationRoutes);
+
 // `require.main === module` is only true when this file is run directly
 // (`node app.js`), not when the test suite `require`s it via supertest —
 // so `npm test` gets the same routed app without also binding a real port

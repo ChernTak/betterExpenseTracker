@@ -52,6 +52,9 @@ dependencies:
   sqflite: ^2.4.1
   path: ^1.9.1
 
+  # Device GPS for the location-based food recommendation feature
+  geolocator: ^13.0.2
+
   # On-device inference for the Tier B spend-forecast regressor (see
   # ai/train_tier_b.py and lib/services/tier_b_inference_service.dart)
   tflite_flutter: ^0.11.0

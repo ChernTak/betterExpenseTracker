@@ -20,6 +20,7 @@ class ApiEndpoints {
   static const String insights = '$baseUrl/api/insights';
   static const String income = '$baseUrl/api/income';
   static const String admin = '$baseUrl/api/admin';
+  static const String recommendations = '$baseUrl/api/recommendations';
 
   static String expenseCreate() => '$expenses/post';
   static String expenseCategorize() => '$expenses/categorize';
@@ -34,6 +35,7 @@ class ApiEndpoints {
   static String authRequestPasswordReset() => '$auth/reset-password';
   static String authConfirmPasswordReset() => '$auth/reset-password/confirm';
   static String authFcmToken() => '$auth/fcm-token';
+  static String authLocationConsent() => '$auth/location-consent';
 
   // FR3.1/FR3.4 — omit month/year to default to the current month (backend does the same)
   static String budgetsList({int? month, int? year}) {
@@ -61,6 +63,13 @@ class ApiEndpoints {
 
   static String incomeUpdate(String id) => '$income/$id';
   static String incomeDelete(String id) => '$income/$id';
+
+  // Location-based food recommendation feature
+  static String recommendationsFood({required double lat, required double lng, double? radius}) {
+    final params = <String>['lat=$lat', 'lng=$lng'];
+    if (radius != null) params.add('radius=$radius');
+    return '$recommendations/food?${params.join('&')}';
+  }
 
   // FR1.7 — admin-only account management
   static String adminUsers() => '$admin/users';

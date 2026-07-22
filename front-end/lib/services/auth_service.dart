@@ -180,6 +180,27 @@ class AuthService {
     }
   }
 
+  /// PUT /api/auth/location-consent — explicit opt-in for the GPS-based food
+  /// recommendation feature. Called right before the first location read.
+  Future<void> updateLocationConsent(bool consent) async {
+    final token = await getToken();
+    if (token == null) return;
+
+    try {
+      final response = await http.put(
+        Uri.parse(ApiEndpoints.authLocationConsent()),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'locationConsent': consent}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update location consent (status ${response.statusCode})');
+      }
+    } catch (e) {
+      throw Exception('Error updating location consent: $e');
+    }
+  }
+
   Future<String?> getToken() => _storage.read(key: _tokenKey);
 
   Future<bool> isLoggedIn() async => (await getToken()) != null;

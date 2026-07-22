@@ -9,5 +9,6 @@ router.post('/guest', authService.guestLogin);
 router.post('/reset-password', authService.requestPasswordReset);
 router.post('/reset-password/confirm', authService.confirmPasswordReset);
 router.put('/fcm-token', authMiddleware, authService.updateFcmToken);
+router.put('/location-consent', authMiddleware, authService.updateLocationConsent);
 
 module.exports = router;

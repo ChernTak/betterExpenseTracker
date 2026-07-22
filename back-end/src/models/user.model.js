@@ -64,6 +64,12 @@ exports.updateFcmToken = (userId, fcmToken) => {
   return db.query('UPDATE users SET fcm_token = $1 WHERE user_id = $2', [fcmToken, userId]);
 };
 
+// Explicit opt-in gate for the GPS-based food recommendation feature —
+// nothing reads device location without this being set true first.
+exports.updateLocationConsent = (userId, locationConsent) => {
+  return db.query('UPDATE users SET location_consent = $1 WHERE user_id = $2', [locationConsent, userId]);
+};
+
 exports.updateProfile = (userId, { username, mobileNumber, profilePicture, monthlyIncome }) => {
   const query = `
     UPDATE users

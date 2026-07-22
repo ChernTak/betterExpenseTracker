@@ -189,6 +189,22 @@ exports.updateFcmToken = async (req, res) => {
   }
 };
 
+// Explicit opt-in toggle for the GPS-based food recommendation feature.
+exports.updateLocationConsent = async (req, res) => {
+  const { locationConsent } = req.body;
+  if (typeof locationConsent !== 'boolean') {
+    return res.status(400).json({ message: 'locationConsent must be a boolean' });
+  }
+
+  try {
+    await userModel.updateLocationConsent(req.user.userId, locationConsent);
+    return res.status(200).json({ message: 'Location consent updated', locationConsent });
+  } catch (err) {
+    console.error('Update location consent error', err);
+    return res.status(500).json({ message: 'Failed to update location consent', error: err.message });
+  }
+};
+
 // FR1.8 — request a time-limited reset link
 exports.requestPasswordReset = async (req, res) => {
   const { email } = req.body;

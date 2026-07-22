@@ -460,7 +460,19 @@ class _ExpectedIncomeTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+              // `label` comes from the user-typed income source (income
+              // history "source" field) — unbounded length, unlike the
+              // static labels elsewhere in this Row pattern, so it needs
+              // Expanded + ellipsis or a long source name overflows.
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 '~RM ${expectedAmount.toStringAsFixed(2)}',
                 style: const TextStyle(fontWeight: FontWeight.w600),

@@ -1,9 +1,5 @@
 const db = require('../config/db');
 
-exports.findAllUsers = (callback) => {
-  db.query('SELECT * FROM users', callback);
-};
-
 exports.findByEmail = (email) => {
   return db.query('SELECT * FROM users WHERE email = $1', [email]);
 };
@@ -79,4 +75,48 @@ exports.updateProfile = (userId, { username, mobileNumber, profilePicture, month
     RETURNING user_id, email, username, mobile_number, profile_picture, monthly_income
   `;
   return db.query(query, [username, mobileNumber, profilePicture, monthlyIncome, userId]);
+};
+
+// FR1.7 — admin account management. password_hash is deliberately excluded
+// from every query below; the admin dashboard never needs it and it should
+// never leave the database.
+exports.findAllForAdmin = () => {
+  const query = `
+    SELECT user_id, email, username, mobile_number, role, is_guest,
+           is_active, is_locked, deactivated_at, created_at
+    FROM users
+    ORDER BY created_at DESC
+  `;
+  return db.query(query);
+};
+
+exports.findByIdForAdmin = (userId) => {
+  const query = `
+    SELECT user_id, email, username, mobile_number, role, is_guest,
+           is_active, is_locked, deactivated_at, created_at
+    FROM users
+    WHERE user_id = $1
+  `;
+  return db.query(query, [userId]);
+};
+
+// Deactivation is reversible and does not touch the login-lockout counters
+// (FR1.4) — it is a separate, admin-only switch (see 024_admin_user_management.sql).
+exports.setActiveStatus = (userId, isActive) => {
+  const query = `
+    UPDATE users
+    SET is_active = $1,
+        deactivated_at = CASE WHEN $1 THEN NULL ELSE NOW() END
+    WHERE user_id = $2
+    RETURNING user_id, email, username, role, is_active, deactivated_at
+  `;
+  return db.query(query, [isActive, userId]);
+};
+
+// Hard delete to satisfy PDPA data-deletion requests (FR1.7). Every other
+// table's user_id FK is ON DELETE CASCADE (see migrations 002-023), so this
+// also removes the user's expenses, budgets, goals, alerts, wishlist items
+// and OCR receipts in one transaction-safe statement.
+exports.deleteUser = (userId) => {
+  return db.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id, email', [userId]);
 };

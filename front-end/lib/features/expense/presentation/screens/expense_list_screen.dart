@@ -5,10 +5,11 @@ import '../../../../core/events/category_events.dart';
 import '../../../../core/events/expense_events.dart';
 import '../../../../services/category_service.dart';
 import '../../../../services/expense_service.dart';
+import 'edit_expense_screen.dart';
 
-/// Read-only full expense history, reached via "View All" from the Guide
-/// tab. Adding expenses happens on the persistent Input tab, so this screen
-/// has no add button of its own.
+/// Full expense history, reached via "View All" from the Guide tab. Adding
+/// expenses happens on the persistent Input tab, so this screen has no add
+/// button of its own — but tapping an entry opens it for editing/deleting.
 class ExpenseListScreen extends StatefulWidget {
   const ExpenseListScreen({super.key});
 
@@ -38,6 +39,13 @@ class _ExpenseListScreenState extends State<ExpenseListScreen> {
     setState(() {
       _expensesFuture = ExpenseService().fetchAllExpenses();
     });
+  }
+
+  // EditExpenseScreen fires expenseDataChanged on save/delete, and this
+  // screen already listens for that (above), so no manual refresh needed
+  // after the push returns.
+  void _openEditExpense(Map<String, dynamic> expense) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => EditExpenseScreen(expense: expense)));
   }
 
   @override
@@ -74,43 +82,49 @@ class _ExpenseListScreenState extends State<ExpenseListScreen> {
                 final amount = (expense['amount'] as num?)?.toDouble() ?? 0;
                 final title = (expense['merchant_name'] as String?)?.trim();
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: categoryItem.color.withValues(alpha: 0.15),
-                        child: Icon(categoryItem.icon, color: categoryItem.color, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              (title != null && title.isNotEmpty) ? title : categoryItem.label,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              '${categoryItem.label} · ${expense['transaction_date'] ?? ''}',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openEditExpense(expense),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: categoryItem.color.withValues(alpha: 0.15),
+                          child: Icon(categoryItem.icon, color: categoryItem.color, size: 20),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '-RM ${amount.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppColors.expense, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (title != null && title.isNotEmpty) ? title : categoryItem.label,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${categoryItem.label} · ${expense['transaction_date'] ?? ''}',
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '-RM ${amount.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppColors.expense, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
+                      ],
+                    ),
                   ),
                 );
               },

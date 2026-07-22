@@ -46,10 +46,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.login(
+      final result = await _authService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      // FR1.7 — an admin account has no expenses/budgets of its own, so it
+      // skips the expense-tracking shell entirely and lands on user management.
+      final role = (result['user'] as Map<String, dynamic>?)?['role'] as String?;
+      if (role == 'admin') {
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, AppRoutes.admin);
+        return;
+      }
 
       // FR3.5 — register this device for budget-alert push notifications.
       // Best-effort: a denied permission or missing setup shouldn't block login.

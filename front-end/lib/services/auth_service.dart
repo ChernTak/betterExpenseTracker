@@ -12,6 +12,27 @@ import '../core/constants/api_endpoints.dart';
 class AuthService {
   static const _storage = FlutterSecureStorage();
   static const _tokenKey = 'jwt_token';
+  // FR1.7 — the JWT already carries `role` (see back-end auth.service.js),
+  // but nothing previously read it client-side. Persisting it lets the app
+  // route admin accounts to the admin screen instead of the expense-tracking
+  // shell, without decoding the token on every screen that needs to know.
+  static const _roleKey = 'user_role';
+  // FR1.7 — AdminUsersScreen needs to know which row in the user list is
+  // "me" so it can hide the deactivate/delete actions on the admin's own
+  // account (comparing by role alone was wrong: it hid the buttons on
+  // every admin row, not just the logged-in admin's own).
+  static const _userIdKey = 'user_id';
+
+  // Shared by login() and continueAsGuest() — both return the same
+  // { token, user: { userId, role, ... } } shape on success.
+  Future<void> _persistSession(Map<String, dynamic> body) async {
+    await _storage.write(key: _tokenKey, value: body['token'] as String);
+    final user = body['user'] as Map<String, dynamic>?;
+    final role = user?['role'] as String?;
+    final userId = user?['userId'] as String?;
+    if (role != null) await _storage.write(key: _roleKey, value: role);
+    if (userId != null) await _storage.write(key: _userIdKey, value: userId);
+  }
 
   /// POST /api/auth/register
   Future<Map<String, dynamic>> register({
@@ -59,10 +80,11 @@ class AuthService {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200) {
-        await _storage.write(key: _tokenKey, value: body['token'] as String);
+        await _persistSession(body);
         return body;
       } else {
-        // Surfaces backend messages like account-locked (423) distinctly
+        // Surfaces backend messages like account-locked (423) distinctly,
+        // and deactivated (403, see FR1.7 — admin.service.js deactivateUser)
         throw Exception(body['message'] ?? 'Login failed');
       }
     } catch (e) {
@@ -82,7 +104,7 @@ class AuthService {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200) {
-        await _storage.write(key: _tokenKey, value: body['token'] as String);
+        await _persistSession(body);
         return body;
       } else {
         throw Exception(body['message'] ?? 'Failed to continue as guest');
@@ -162,5 +184,11 @@ class AuthService {
 
   Future<bool> isLoggedIn() async => (await getToken()) != null;
 
-  Future<void> logout() => _storage.delete(key: _tokenKey);
+  Future<String?> getRole() => _storage.read(key: _roleKey);
+
+  Future<bool> isAdmin() async => (await getRole()) == 'admin';
+
+  Future<String?> getUserId() => _storage.read(key: _userIdKey);
+
+  Future<void> logout() => _storage.deleteAll();
 }

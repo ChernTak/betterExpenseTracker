@@ -19,6 +19,7 @@ class ApiEndpoints {
   static const String categories = '$baseUrl/api/categories';
   static const String insights = '$baseUrl/api/insights';
   static const String income = '$baseUrl/api/income';
+  static const String admin = '$baseUrl/api/admin';
 
   static String expenseCreate() => '$expenses/post';
   static String expenseCategorize() => '$expenses/categorize';
@@ -60,4 +61,10 @@ class ApiEndpoints {
 
   static String incomeUpdate(String id) => '$income/$id';
   static String incomeDelete(String id) => '$income/$id';
+
+  // FR1.7 — admin-only account management
+  static String adminUsers() => '$admin/users';
+  static String adminDeactivateUser(String userId) => '$admin/users/$userId/deactivate';
+  static String adminReactivateUser(String userId) => '$admin/users/$userId/reactivate';
+  static String adminDeleteUser(String userId) => '$admin/users/$userId';
 }

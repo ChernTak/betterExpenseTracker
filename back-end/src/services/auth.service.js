@@ -113,6 +113,12 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // FR1.7 — an admin-deactivated account is refused outright, distinct
+    // from the self-clearing is_locked state below.
+    if (!user.is_active) {
+      return res.status(403).json({ message: 'This account has been deactivated. Contact support for assistance.' });
+    }
+
     // Auto-unlock once the 30-minute lockout window has passed
     if (user.is_locked && user.locked_until && new Date(user.locked_until) <= new Date()) {
       await userModel.resetFailedLogin(user.user_id);

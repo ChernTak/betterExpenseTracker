@@ -55,24 +55,6 @@ class MyApp extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(foregroundColor: AppColors.primary),
         ),
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: Colors.white,
-          indicatorColor: AppColors.primary,
-          height: 68,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          iconTheme: WidgetStateProperty.resolveWith(
-            (states) => IconThemeData(
-              color: states.contains(WidgetState.selected) ? Colors.white : AppColors.textSecondary,
-            ),
-          ),
-          labelTextStyle: WidgetStateProperty.resolveWith(
-            (states) => TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: states.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary,
-            ),
-          ),
-        ),
       ),
       initialRoute: AppRoutes.login,
       routes: AppRoutes.routes,

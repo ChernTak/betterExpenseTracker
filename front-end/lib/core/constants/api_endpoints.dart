@@ -71,6 +71,9 @@ class ApiEndpoints {
     return '$recommendations/food?${params.join('&')}';
   }
 
+  static String recommendationVenueDetail(String provider, String providerPlaceId) =>
+      '$recommendations/food/venues/$provider/${Uri.encodeComponent(providerPlaceId)}';
+
   // FR1.7 — admin-only account management
   static String adminUsers() => '$admin/users';
   static String adminDeactivateUser(String userId) => '$admin/users/$userId/deactivate';

@@ -8,9 +8,10 @@ import 'auth_service.dart';
 ///
 /// Sends the device's current coordinates to the backend, which computes
 /// C_meal from the user's remaining food_dining budget, filters nearby
-/// venues (Foursquare) to a walking radius and that cap, and returns a
-/// ranked list. Screens should call this and only handle the resulting
-/// data or the exception, never build the HTTP request themselves.
+/// venues (OSM/Geoapify/Foursquare 3-tier fallback pipeline) to a walking
+/// radius and that cap, and returns a ranked list. Screens should call this
+/// and only handle the resulting data or the exception, never build the
+/// HTTP request themselves.
 class FoodRecommendationService {
   final _authService = AuthService();
 
@@ -43,6 +44,28 @@ class FoodRecommendationService {
       }
     } catch (e) {
       throw Exception('Error fetching food recommendations: $e');
+    }
+  }
+
+  /// GET /api/recommendations/food/venues/:provider/:providerPlaceId —
+  /// venue detail (address/phone/website), served from the backend's cache
+  /// when available so repeat opens of a popular venue don't re-hit the
+  /// provider that originally sourced it (Overpass/Geoapify/Foursquare).
+  Future<Map<String, dynamic>> fetchVenueDetail(String provider, String providerPlaceId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiEndpoints.recommendationVenueDetail(provider, providerPlaceId)),
+        headers: await _authHeaders(),
+      );
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return body;
+      } else {
+        throw Exception(body['message'] ?? 'Failed to fetch venue detail');
+      }
+    } catch (e) {
+      throw Exception('Error fetching venue detail: $e');
     }
   }
 }

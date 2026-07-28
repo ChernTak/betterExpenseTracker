@@ -1,3 +1,5 @@
+const mapsConfig = require('../config/maps');
+
 const EARTH_RADIUS_M = 6371000;
 
 function toRadians(deg) {
@@ -28,4 +30,16 @@ exports.filterWithinRadius = (venues, { lat, lng }, radiusM) => {
       return { ...venue, distanceM };
     })
     .filter((venue) => venue.distanceM <= radiusM);
+};
+
+// Composition layer between recommendation.service.js and the provider
+// pipeline in config/maps.js: `query`/`options` arrive already assembled
+// (from config/dining.js + request params) and are passed straight through
+// — this file adds no defaults and reads no env itself, it only threads
+// what it's given down to searchVenues, then applies the radius filter to
+// whatever the pipeline returned.
+exports.findNearbyVenues = async (query, options) => {
+  const { venues: rawVenues, providerStatus } = await mapsConfig.searchVenues(query, options);
+  const venues = exports.filterWithinRadius(rawVenues, { lat: query.lat, lng: query.lng }, query.radiusM);
+  return { venues, providerStatus };
 };

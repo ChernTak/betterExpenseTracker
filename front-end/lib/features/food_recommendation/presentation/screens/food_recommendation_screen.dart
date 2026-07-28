@@ -4,6 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/food_recommendation_service.dart';
 import '../../../../services/gps_service.dart';
+import 'venue_detail_screen.dart';
 
 /// Food tab — real-time, budget-aware nearby food suggestions (Constraint-
 /// Driven Utility Filtering: C_meal from the remaining food_dining budget,
@@ -198,58 +199,64 @@ class _VenueCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.surface, width: 1),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VenueDetailScreen(venue: venue))),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  venue['name'] as String? ?? 'Unknown venue',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      venue['name'] as String? ?? 'Unknown venue',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(_priceLabel, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                [if (categories.isNotEmpty) categories.first, if (distanceLabel.isNotEmpty) distanceLabel].join(' • '),
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              if ((venue['address'] as String?)?.isNotEmpty ?? false) ...[
+                const SizedBox(height: 2),
+                Text(
+                  venue['address'] as String,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(_priceLabel, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              ],
+              if (savings != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryMuted,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Save ~RM${savings.toStringAsFixed(0)} vs. your meal cap',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12),
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            [if (categories.isNotEmpty) categories.first, if (distanceLabel.isNotEmpty) distanceLabel].join(' • '),
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-          if ((venue['address'] as String?)?.isNotEmpty ?? false) ...[
-            const SizedBox(height: 2),
-            Text(
-              venue['address'] as String,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          if (savings != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primaryMuted,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Save ~RM${savings.toStringAsFixed(0)} vs. your meal cap',
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12),
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

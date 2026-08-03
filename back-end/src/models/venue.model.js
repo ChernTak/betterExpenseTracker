@@ -28,3 +28,20 @@ exports.upsertVenue = ({ provider, providerPlaceId, name, address, lat, lng, pri
     priceTier ?? null, tel ?? null, website ?? null, hours ?? null, categories ?? [],
   ]);
 };
+
+// Narrow upsert used by the search-list photo enrichment pass (recommendation.
+// service.js#getFoodRecommendations), which only ever knows name/lat/lng for
+// a venue — unlike upsertVenue above, this only ever touches photo_reference,
+// so it can't blank out address/tel/website/hours a prior detail-view lookup
+// may have already cached for the same venue.
+exports.upsertPhotoReference = ({ provider, providerPlaceId, name, lat, lng, photoReference, photoApi }) => {
+  const query = `
+    INSERT INTO venue_cache (provider, provider_place_id, name, lat, lng, photo_reference, photo_api, cached_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    ON CONFLICT (provider, provider_place_id) DO UPDATE SET
+      photo_reference = EXCLUDED.photo_reference,
+      photo_api = EXCLUDED.photo_api
+    RETURNING *
+  `;
+  return db.query(query, [provider, providerPlaceId, name, lat ?? null, lng ?? null, photoReference ?? null, photoApi ?? null]);
+};

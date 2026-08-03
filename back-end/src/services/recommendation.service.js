@@ -2,8 +2,10 @@ const contextService = require('./context.service');
 const locationService = require('./location.service');
 const nudgeService = require('./nudge.service');
 const mapsConfig = require('../config/maps');
+const googlePhotosService = require('./googlePhotos.service');
 const recommendationModel = require('../models/recommendation.model');
 const venueModel = require('../models/venue.model');
+const photoCacheModel = require('../models/photoCache.model');
 const {
   DEFAULT_RADIUS_M,
   FOOD_RESULT_LIMIT,
@@ -11,12 +13,15 @@ const {
   OVERPASS_TIMEOUT_MS,
   GEOAPIFY_TIMEOUT_MS,
   FSQ_TIMEOUT_MS,
+  GOOGLE_PHOTO_TIMEOUT_MS,
   OVERPASS_API_URL,
   FOOD_CATEGORIES,
   PRICE_TIER_MYR_BANDS,
   DEFAULT_PRICE_TIER,
   VENUE_CACHE_TTL_DAYS,
 } = require('../config/dining');
+
+const GOOGLE_PHOTO_MAX_WIDTH = 400;
 
 function venueCacheRowToResponse(row) {
   return {
@@ -73,6 +78,55 @@ function scoreVenue(venue, { mealCap, radiusM, preferredCuisines }) {
   return 0.4 * proximityScore + 0.4 * priceScore + 0.2 * prefScore;
 }
 
+function photoUrlFor(photoReference, photoApi) {
+  return photoReference && photoApi
+    ? `/api/recommendations/food/photo/${photoApi}/${encodeURIComponent(photoReference)}`
+    : null;
+}
+
+// Enriches each ranked venue with a photoUrl, cache-first: a venue already
+// carrying a fresh photo_reference (from a prior search or detail view)
+// skips the Google call entirely. Runs the whole batch in parallel — one
+// venue's lookup failing resolves to null rather than rejecting the others
+// (same defensive-per-item style as config/maps.js#searchVenues's tiers).
+async function enrichWithPhotos(venues, { radiusM }) {
+  return Promise.all(
+    venues.map(async (venue) => {
+      try {
+        const cached = await venueModel.findByPlaceId({ provider: venue.provider, providerPlaceId: venue.id });
+        const cachedRow = cached.rows[0];
+        if (cachedRow?.photo_reference && cachedRow?.photo_api && isFresh(cachedRow.cached_at)) {
+          return { ...venue, photoUrl: photoUrlFor(cachedRow.photo_reference, cachedRow.photo_api) };
+        }
+
+        // Tries the New Places API first, falls back to the legacy API on
+        // any failure — see googlePhotos.service.js's header comment for why.
+        const photo = await googlePhotosService.findPhotoReference(
+          { name: venue.name, lat: venue.lat, lng: venue.lng },
+          { radiusM, timeoutMs: GOOGLE_PHOTO_TIMEOUT_MS },
+        );
+
+        if (photo) {
+          await venueModel.upsertPhotoReference({
+            provider: venue.provider,
+            providerPlaceId: venue.id,
+            name: venue.name,
+            lat: venue.lat,
+            lng: venue.lng,
+            photoReference: photo.reference,
+            photoApi: photo.api,
+          });
+        }
+
+        return { ...venue, photoUrl: photo ? photoUrlFor(photo.reference, photo.api) : null };
+      } catch (err) {
+        console.error(`Photo enrichment failed for "${venue.name}"`, err.message);
+        return { ...venue, photoUrl: null };
+      }
+    }),
+  );
+}
+
 // GET /api/recommendations/food?lat=&lng=&radius=&cuisines=
 exports.getFoodRecommendations = async (req, res) => {
   const lat = Number(req.query.lat);
@@ -112,6 +166,17 @@ exports.getFoodRecommendations = async (req, res) => {
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
 
+    // A photo lookup failure shouldn't fail the recommendations themselves
+    // — enrichWithPhotos already resolves each venue to photoUrl: null on
+    // any per-venue error, but guard the whole pass too in case Google is
+    // unconfigured/unreachable in a way that throws before that.
+    let enriched = ranked;
+    try {
+      enriched = await enrichWithPhotos(ranked, { radiusM });
+    } catch (photoErr) {
+      console.error('Photo enrichment pass failed', photoErr);
+    }
+
     await recommendationModel.logRecommendation({
       userId: req.user.userId,
       title: 'Nearby food recommendations',
@@ -125,7 +190,7 @@ exports.getFoodRecommendations = async (req, res) => {
         userId: req.user.userId,
         budgetId: context.budgetId,
         mealCap: context.mealCap,
-        venues: ranked,
+        venues: enriched,
       });
     } catch (nudgeErr) {
       console.error('Loss-aversion nudge failed', nudgeErr);
@@ -137,7 +202,7 @@ exports.getFoodRecommendations = async (req, res) => {
       remainingBudget: context.remainingBudget,
       daysLeft: context.daysLeft,
       radiusM,
-      venues: ranked,
+      venues: enriched,
       providersUsed: providerStatus,
     });
   } catch (err) {
@@ -193,5 +258,52 @@ exports.getVenueDetail = async (req, res) => {
   } catch (err) {
     console.error('Get venue detail error', err);
     return res.status(500).json({ message: 'Failed to fetch venue detail', error: err.message });
+  }
+};
+
+// GET /api/recommendations/food/photo/:api/:photoReference — proxies the
+// actual photo bytes rather than handing the client a Google URL with the
+// API key embedded in it (every other provider key in this app stays
+// backend-only; this keeps that rule intact — see plan). Cache-or-fetch
+// against photo_cache first: the venue_cache/photo_reference lookup is
+// already shared across all users, but without this second cache, every
+// fresh Image.network() load (different device, or same device after its
+// local cache clears) would re-bill Google for bytes we've already fetched
+// once. Cache-Control still set for the client-side case this doesn't cover
+// (same device, same session, no repeat network request at all).
+exports.getVenuePhoto = async (req, res) => {
+  const { api, photoReference } = req.params;
+
+  try {
+    const cached = await photoCacheModel.findByReference({ api, photoReference });
+    if (cached.rows.length > 0 && isFresh(cached.rows[0].cached_at)) {
+      const row = cached.rows[0];
+      res.set('Content-Type', row.content_type);
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.status(200).send(row.bytes);
+    }
+
+    const photo = await googlePhotosService.fetchPhotoBytes(
+      { reference: photoReference, api },
+      { maxWidth: GOOGLE_PHOTO_MAX_WIDTH, timeoutMs: GOOGLE_PHOTO_TIMEOUT_MS },
+    );
+
+    if (!photo) {
+      return res.status(404).json({ message: 'Photo unavailable' });
+    }
+
+    await photoCacheModel.upsertPhoto({
+      api,
+      photoReference,
+      contentType: photo.contentType,
+      bytes: photo.buffer,
+    });
+
+    res.set('Content-Type', photo.contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(photo.buffer);
+  } catch (err) {
+    console.error('Get venue photo error', err);
+    return res.status(500).json({ message: 'Failed to fetch venue photo', error: err.message });
   }
 };

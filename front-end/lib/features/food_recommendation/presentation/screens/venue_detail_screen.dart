@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../services/auth_service.dart';
 import '../../../../services/food_recommendation_service.dart';
+import '../../../expense/presentation/screens/log_venue_expense_screen.dart';
+import '../widgets/venue_photo.dart';
 
 /// Venue detail screen. Takes the summary already known from the list
 /// (name/distance/price/category/lat/lng) for an instant first paint, then
@@ -24,14 +27,23 @@ class VenueDetailScreen extends StatefulWidget {
 
 class _VenueDetailScreenState extends State<VenueDetailScreen> {
   final _recommendationService = FoodRecommendationService();
+  final _authService = AuthService();
 
   Map<String, dynamic>? _detail;
   String? _errorMessage;
+  Map<String, String>? _imageHeaders;
 
   @override
   void initState() {
     super.initState();
     _loadDetail();
+    _loadImageHeaders();
+  }
+
+  Future<void> _loadImageHeaders() async {
+    final token = await _authService.getToken();
+    if (!mounted) return;
+    setState(() => _imageHeaders = token != null ? {'Authorization': 'Bearer $token'} : null);
   }
 
   Future<void> _loadDetail() async {
@@ -73,6 +85,18 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  void _logExpense() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LogVenueExpenseScreen(
+          initialMerchantName: widget.venue['name'] as String?,
+          initialCategory: 'food_dining',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = widget.venue['name'] as String? ?? 'Unknown venue';
@@ -93,21 +117,43 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          VenuePhoto(
+            photoPath: widget.venue['photoUrl'] as String?,
+            authHeaders: _imageHeaders,
+            width: double.infinity,
+            height: 180,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          const SizedBox(height: 16),
           if (categories.isNotEmpty || distanceLabel != null)
             Text(
               [if (categories.isNotEmpty) categories.first, ?distanceLabel].join(' • '),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
           // Always available immediately — doesn't need to wait on the
-          // detail fetch since lat/lng are already known from the list.
-          if (hasCoords) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _openDirections,
-              icon: const Icon(Icons.directions_outlined, size: 18),
-              label: const Text('Get Directions'),
-            ),
-          ],
+          // detail fetch since lat/lng/name are already known from the list.
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _logExpense,
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                  label: const Text('Log Expense'),
+                ),
+              ),
+              if (hasCoords) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _openDirections,
+                    icon: const Icon(Icons.directions_outlined, size: 18),
+                    label: const Text('Directions'),
+                  ),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 16),
           _DetailRow(icon: Icons.location_on_outlined, label: 'Address', value: _detail?['address'] as String?, loading: loading),
           _DetailRow(

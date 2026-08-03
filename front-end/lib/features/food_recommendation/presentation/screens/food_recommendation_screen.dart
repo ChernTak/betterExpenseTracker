@@ -4,6 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/food_recommendation_service.dart';
 import '../../../../services/gps_service.dart';
+import '../widgets/venue_photo.dart';
 import 'venue_detail_screen.dart';
 
 /// Food tab — real-time, budget-aware nearby food suggestions (Constraint-
@@ -28,6 +29,7 @@ class _FoodRecommendationScreenState extends State<FoodRecommendationScreen> {
   _LoadState _state = _LoadState.loading;
   String? _errorMessage;
   Map<String, dynamic>? _data;
+  Map<String, String>? _imageHeaders;
 
   @override
   void initState() {
@@ -57,9 +59,13 @@ class _FoodRecommendationScreenState extends State<FoodRecommendationScreen> {
         lat: position.latitude,
         lng: position.longitude,
       );
+      // Fetched once per load rather than per-card so 20 venue photos don't
+      // each hit secure storage separately.
+      final token = await _authService.getToken();
       if (!mounted) return;
       setState(() {
         _data = data;
+        _imageHeaders = token != null ? {'Authorization': 'Bearer $token'} : null;
         _state = _LoadState.loaded;
       });
     } catch (e) {
@@ -117,7 +123,7 @@ class _FoodRecommendationScreenState extends State<FoodRecommendationScreen> {
             message: 'Try again later or from a different spot.',
           )
         else
-          ...venues.map((v) => _VenueCard(venue: v, mealCap: mealCap)),
+          ...venues.map((v) => _VenueCard(venue: v, mealCap: mealCap, imageHeaders: _imageHeaders)),
       ],
     );
   }
@@ -158,8 +164,9 @@ class _MealCapHeader extends StatelessWidget {
 class _VenueCard extends StatelessWidget {
   final Map<String, dynamic> venue;
   final double? mealCap;
+  final Map<String, String>? imageHeaders;
 
-  const _VenueCard({required this.venue, required this.mealCap});
+  const _VenueCard({required this.venue, required this.mealCap, required this.imageHeaders});
 
   // Mirrors config/dining.js's PRICE_TIER_MYR_BANDS — Foursquare's price is
   // a 1-4 categorical tier, not an exact bill amount, so this is a rough
@@ -209,51 +216,60 @@ class _VenueCard extends StatelessWidget {
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VenueDetailScreen(venue: venue))),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      venue['name'] as String? ?? 'Unknown venue',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              VenuePhoto(photoPath: venue['photoUrl'] as String?, authHeaders: imageHeaders),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            venue['name'] as String? ?? 'Unknown venue',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_priceLabel, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(_priceLabel, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                [if (categories.isNotEmpty) categories.first, if (distanceLabel.isNotEmpty) distanceLabel].join(' • '),
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              if ((venue['address'] as String?)?.isNotEmpty ?? false) ...[
-                const SizedBox(height: 2),
-                Text(
-                  venue['address'] as String,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 4),
+                    Text(
+                      [if (categories.isNotEmpty) categories.first, if (distanceLabel.isNotEmpty) distanceLabel].join(' • '),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                    if ((venue['address'] as String?)?.isNotEmpty ?? false) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        venue['address'] as String,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (savings != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryMuted,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Save ~RM${savings.toStringAsFixed(0)} vs. your meal cap',
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-              if (savings != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryMuted,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Save ~RM${savings.toStringAsFixed(0)} vs. your meal cap',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12),
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
         ),

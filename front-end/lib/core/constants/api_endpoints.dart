@@ -74,6 +74,13 @@ class ApiEndpoints {
   static String recommendationVenueDetail(String provider, String providerPlaceId) =>
       '$recommendations/food/venues/$provider/${Uri.encodeComponent(providerPlaceId)}';
 
+  // venue['photoUrl'] from the recommendations/detail response is already a
+  // path relative to the server root (e.g. '/api/recommendations/food/photo/...')
+  // — the backend doesn't reliably know its own externally-reachable host
+  // given this project's LAN-IP/adb-reverse setup, so it returns a path and
+  // this just prefixes the baseUrl the client already knows.
+  static String recommendationVenuePhoto(String photoPath) => '$baseUrl$photoPath';
+
   // FR1.7 — admin-only account management
   static String adminUsers() => '$admin/users';
   static String adminDeactivateUser(String userId) => '$admin/users/$userId/deactivate';

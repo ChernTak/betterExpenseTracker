@@ -7,5 +7,6 @@ router.use(authMiddleware);
 
 router.get('/food', recommendationService.getFoodRecommendations);
 router.get('/food/venues/:provider/:providerPlaceId', recommendationService.getVenueDetail);
+router.get('/food/photo/:api/:photoReference', recommendationService.getVenuePhoto);
 
 module.exports = router;

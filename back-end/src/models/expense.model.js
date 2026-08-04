@@ -11,6 +11,19 @@ exports.getExpensesByUserId = (userId, callback) => {
   db.query(query, [userId], callback);
 };
 
+// Promise-based (not callback, unlike the rest of this file) since its only
+// caller, recommendation.service.js, is async/await throughout — feeds the
+// food recommendation ranking's "you've been here before" personalization.
+exports.getFoodDiningMerchantHistory = (userId) => {
+  const query = `
+    SELECT merchant_name, COUNT(*) AS visit_count
+    FROM expenses
+    WHERE user_id = $1 AND category = 'food_dining' AND merchant_name IS NOT NULL
+    GROUP BY merchant_name
+  `;
+  return db.query(query, [userId]);
+};
+
 exports.getExpenseById = (id, userId, callback) => {
   const query = 'SELECT * FROM expenses WHERE expense_id = $1 AND user_id = $2';
   db.query(query, [id, userId], callback);

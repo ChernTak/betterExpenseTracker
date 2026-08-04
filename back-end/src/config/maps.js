@@ -65,7 +65,22 @@ function normalizeVenue(raw, provider, { defaultPriceTier }) {
     website: raw.website ?? null,
     hours: raw.hours ?? null,
     categories: raw.categories ?? [],
+    // null (not false) when the tag is simply absent — sparse in practice
+    // (confirmed live: 0 of 20 real venues near KL Sentral had it set at
+    // all), and absence means "unknown", not "not halal". Never inferred
+    // from category/cuisine text — only ever a provider's own explicit tag.
+    dietary: { halal: raw.halal ?? null },
   };
+}
+
+// OSM's diet:* tagging convention (used directly by Overpass, passed through
+// unprefixed by Geoapify's datasource.raw — confirmed live) — 'yes'/'only'
+// mean halal-compliant, 'no' is an explicit negative, anything else/absent
+// is unknown rather than assumed either way.
+function parseHalalTag(value) {
+  if (value === 'yes' || value === 'only') return true;
+  if (value === 'no') return false;
+  return null;
 }
 
 // ---------------------------------------------------------------------
@@ -129,6 +144,7 @@ out body ${resultLimit};`;
         tel: tags.phone || tags['contact:phone'] || null,
         website: tags.website || tags['contact:website'] || null,
         hours: tags.opening_hours || null,
+        halal: parseHalalTag(tags['diet:halal']),
         categories: tags.amenity ? [tags.amenity] : [],
         // OSM has no price field, ever — always falls back to defaultPriceTier.
         priceTier: null,
@@ -190,6 +206,7 @@ out body;`;
       tel: tags.phone || tags['contact:phone'] || null,
       website: tags.website || tags['contact:website'] || null,
       hours: tags.opening_hours || null,
+      halal: parseHalalTag(tags['diet:halal']),
       categories: tags.amenity ? [tags.amenity] : [],
       priceTier: null,
     },
@@ -237,6 +254,9 @@ async function searchGeoapify(query, options) {
         tel: p.contact?.phone || p.phone || null,
         website: p.website || p.contact?.website || null,
         hours: p.opening_hours ?? null,
+        // Geoapify passes OSM's raw diet:* tag through unprefixed under
+        // datasource.raw — confirmed live, same key as Overpass uses.
+        halal: parseHalalTag(p.datasource?.raw?.['diet:halal']),
         categories: p.categories || [],
         // Geoapify's OSM-derived data has no standard price field either.
         priceTier: null,
@@ -275,6 +295,7 @@ async function getGeoapifyPlaceDetail(providerPlaceId, options) {
       tel: p.contact?.phone || p.phone || null,
       website: p.website || p.contact?.website || null,
       hours: p.opening_hours ?? null,
+      halal: parseHalalTag(p.datasource?.raw?.['diet:halal']),
       categories: p.categories || [],
       priceTier: null,
     },

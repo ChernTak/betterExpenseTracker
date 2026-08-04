@@ -29,10 +29,20 @@ class FoodRecommendationService {
     required double lat,
     required double lng,
     double? radius,
+    List<String>? cuisines,
+    bool? halal,
+    String? visitFilter,
   }) async {
     try {
       final response = await http.get(
-        Uri.parse(ApiEndpoints.recommendationsFood(lat: lat, lng: lng, radius: radius)),
+        Uri.parse(ApiEndpoints.recommendationsFood(
+          lat: lat,
+          lng: lng,
+          radius: radius,
+          cuisines: cuisines,
+          halal: halal,
+          visitFilter: visitFilter,
+        )),
         headers: await _authHeaders(),
       );
 

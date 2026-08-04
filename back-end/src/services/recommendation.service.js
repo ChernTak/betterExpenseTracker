@@ -6,6 +6,8 @@ const googlePhotosService = require('./googlePhotos.service');
 const recommendationModel = require('../models/recommendation.model');
 const venueModel = require('../models/venue.model');
 const photoCacheModel = require('../models/photoCache.model');
+const expenseModel = require('../models/expense.model');
+const { normalizeMerchantText } = require('./categorization.service');
 const {
   DEFAULT_RADIUS_M,
   FOOD_RESULT_LIMIT,
@@ -57,10 +59,16 @@ function withinMealCap(venue, mealCap) {
   return band.min <= mealCap;
 }
 
-// Soft utility ranking: proximity + price margin below cap + optional
-// cuisine-preference match. Weighted 0.4/0.4/0.2 — no ML, just a composite
-// score so cold-start (no purchase history) users still get a sensible order.
-function scoreVenue(venue, { mealCap, radiusM, preferredCuisines }) {
+// Soft utility ranking: proximity + price margin below cap + cuisine
+// preference + personal visit history + optional halal boost. Weighted
+// 0.25/0.25/0.1/0.25/0.15 — visitScore keeps real weight (comparable to
+// price fit) since it's the one signal Google Maps structurally can't have
+// (a real financial commitment, not a click/rating), but proximity+price
+// together still outweigh it so a budget/distance mismatch isn't overridden
+// by "you've eaten here before". No ML, just a composite score so cold-start
+// (no purchase history, no filters set) users still get a sensible order —
+// every optional term is simply 0 then.
+function scoreVenue(venue, { mealCap, radiusM, preferredCuisines, visitHistory, halalPreferred }) {
   const proximityScore = 1 - Math.min(venue.distanceM / radiusM, 1);
 
   let priceScore = 0.5; // neutral when there's no budget cap to score against
@@ -69,13 +77,28 @@ function scoreVenue(venue, { mealCap, radiusM, preferredCuisines }) {
     priceScore = Math.max(0, Math.min(margin, 1));
   }
 
+  // Substring, not exact match — Overpass/Geoapify categories are generic
+  // type strings ("restaurant") but Foursquare's are specific cuisine names
+  // ("Tempura Restaurant"); exact match would silently never match
+  // Foursquare-sourced venues at all.
   const prefScore =
     preferredCuisines.length > 0 &&
-    venue.categories.some((c) => preferredCuisines.includes(c.toLowerCase()))
+    venue.categories.some((c) => preferredCuisines.some((pref) => c.toLowerCase().includes(pref)))
       ? 1
       : 0;
 
-  return 0.4 * proximityScore + 0.4 * priceScore + 0.2 * prefScore;
+  // Full weight at 3+ prior logged visits, partial credit below that — so
+  // one single long-ago expense doesn't permanently dominate the ranking.
+  const visitCount = visitHistory.get(normalizeMerchantText(venue.name || '')) ?? 0;
+  const visitScore = Math.min(visitCount / 3, 1);
+
+  // Only non-zero when the user opted in AND the venue is confirmed halal —
+  // never penalizes unconfirmed venues (dietary tagging is sparse; absence
+  // means "unknown", not "not halal" — see plan). Zero for everyone when
+  // the preference isn't set, same no-op shape as prefScore.
+  const halalScore = halalPreferred && venue.dietary?.halal === true ? 1 : 0;
+
+  return 0.25 * proximityScore + 0.25 * priceScore + 0.1 * prefScore + 0.25 * visitScore + 0.15 * halalScore;
 }
 
 function photoUrlFor(photoReference, photoApi) {
@@ -140,6 +163,10 @@ exports.getFoodRecommendations = async (req, res) => {
     .split(',')
     .map((c) => c.trim().toLowerCase())
     .filter(Boolean);
+  const halalPreferred = req.query.halal === 'true';
+  // 'new' = exclude previously-visited venues, 'visited' = only previously-
+  // visited, unset/anything else = no filter (the common case).
+  const visitFilter = req.query.visitFilter === 'new' || req.query.visitFilter === 'visited' ? req.query.visitFilter : null;
 
   // Assembled once per request from config/dining.js (env-overridable
   // defaults) — everything below this point (location.service.js,
@@ -158,13 +185,34 @@ exports.getFoodRecommendations = async (req, res) => {
   try {
     const context = await contextService.getDiningContext(req.user.userId);
 
+    // "You've been here before" personalization — a Map of normalized
+    // merchant name -> how many food_dining expenses were ever logged
+    // against it. Built once per request, fed into scoreVenue below.
+    const history = await expenseModel.getFoodDiningMerchantHistory(req.user.userId);
+    const visitHistory = new Map(
+      history.rows.map((row) => [normalizeMerchantText(row.merchant_name), Number(row.visit_count)]),
+    );
+
     const { venues: inRadius, providerStatus } = await locationService.findNearbyVenues(query, options);
     const affordable = inRadius.filter((v) => withinMealCap(v, context.mealCap));
 
-    const ranked = affordable
-      .map((v) => ({ ...v, score: scoreVenue(v, { mealCap: context.mealCap, radiusM, preferredCuisines }) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 20);
+    const scored = affordable.map((v) => {
+      const visitCount = visitHistory.get(normalizeMerchantText(v.name || '')) ?? 0;
+      return {
+        ...v,
+        score: scoreVenue(v, { mealCap: context.mealCap, radiusM, preferredCuisines, visitHistory, halalPreferred }),
+        previouslyVisited: visitCount > 0,
+        visitCount,
+      };
+    });
+
+    // Applied before the top-20 slice below, not after — so a filtered-out
+    // venue never wastes a slot in the capped result set.
+    const filtered = visitFilter
+      ? scored.filter((v) => (visitFilter === 'new' ? !v.previouslyVisited : v.previouslyVisited))
+      : scored;
+
+    const ranked = filtered.sort((a, b) => b.score - a.score).slice(0, 20);
 
     // A photo lookup failure shouldn't fail the recommendations themselves
     // — enrichWithPhotos already resolves each venue to photoUrl: null on

@@ -102,4 +102,4 @@ async function categorize(req, res) {
   }
 }
 
-module.exports = { classifyMerchant, categorize };
+module.exports = { classifyMerchant, categorize, normalizeMerchantText };

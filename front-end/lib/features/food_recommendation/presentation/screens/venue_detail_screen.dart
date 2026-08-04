@@ -7,6 +7,28 @@ import '../../../../services/food_recommendation_service.dart';
 import '../../../expense/presentation/screens/log_venue_expense_screen.dart';
 import '../widgets/venue_photo.dart';
 
+/// Small pill for the "Halal" / "Visited Nx before" callouts — same visual
+/// weight as the badges on the list card's _VenueCard, kept as a plain
+/// function here since this screen builds them inline rather than as a
+/// reusable class.
+Widget _venueBadge({required IconData icon, required String text}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: AppColors.primaryMuted,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: AppColors.primary),
+        const SizedBox(width: 4),
+        Text(text, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12)),
+      ],
+    ),
+  );
+}
+
 /// Venue detail screen. Takes the summary already known from the list
 /// (name/distance/price/category/lat/lng) for an instant first paint, then
 /// fetches address/phone/website/hours in the background — served from the
@@ -130,6 +152,23 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
               [if (categories.isNotEmpty) categories.first, ?distanceLabel].join(' • '),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
+          if (widget.venue['previouslyVisited'] == true ||
+              (widget.venue['dietary'] as Map<String, dynamic>?)?['halal'] == true) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if ((widget.venue['dietary'] as Map<String, dynamic>?)?['halal'] == true)
+                  _venueBadge(icon: Icons.check_circle_outline, text: 'Halal'),
+                if (widget.venue['previouslyVisited'] == true)
+                  _venueBadge(
+                    icon: Icons.history,
+                    text: 'Visited ${(widget.venue['visitCount'] as num?)?.toInt() ?? 0}x before',
+                  ),
+              ],
+            ),
+          ],
           // Always available immediately — doesn't need to wait on the
           // detail fetch since lat/lng/name are already known from the list.
           const SizedBox(height: 12),

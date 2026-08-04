@@ -65,9 +65,19 @@ class ApiEndpoints {
   static String incomeDelete(String id) => '$income/$id';
 
   // Location-based food recommendation feature
-  static String recommendationsFood({required double lat, required double lng, double? radius}) {
+  static String recommendationsFood({
+    required double lat,
+    required double lng,
+    double? radius,
+    List<String>? cuisines,
+    bool? halal,
+    String? visitFilter,
+  }) {
     final params = <String>['lat=$lat', 'lng=$lng'];
     if (radius != null) params.add('radius=$radius');
+    if (cuisines != null && cuisines.isNotEmpty) params.add('cuisines=${cuisines.join(',')}');
+    if (halal == true) params.add('halal=true');
+    if (visitFilter != null) params.add('visitFilter=$visitFilter');
     return '$recommendations/food?${params.join('&')}';
   }
 

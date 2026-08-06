@@ -24,9 +24,14 @@ ai/models/*
 !ai/models/.gitkeep
 
 # Copy of the trained Tier B model Flutter actually bundles (see
-# ai/train_tier_b.py) — same regenerable-artifact reasoning as ai/models/ above.
+# ai/train_tier_b.py) — same regenerable-artifact reasoning as ai/models/
+# above. The Vosk wake-word model zip (FR4.4) is excluded for the same
+# "don't commit a large binary" reason, though it's a manual download
+# rather than a regenerated one — see front-end/assets/models/README.md,
+# which IS tracked so the download step isn't lost.
 front-end/assets/models/*
 !front-end/assets/models/.gitkeep
+!front-end/assets/models/README.md
 
 # General
 .DS_Store

@@ -27,7 +27,10 @@ android {
         applicationId = "com.example.expense_tracker"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // vosk_flutter_2 (FR4.4 hands-free wake word) declares minSdkVersion
+        // 30 itself — the manifest merge fails below that. This raises the
+        // whole app's floor to Android 11, excluding Android 10 and older.
+        minSdk = 30
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

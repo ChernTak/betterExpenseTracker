@@ -1,9 +1,14 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/ai_insights/presentation/screens/ai_insights_screen.dart';
 import '../../features/budget/presentation/screens/budgets_screen.dart';
 import '../../features/budget/presentation/screens/guide_screen.dart';
 import '../../features/expense/presentation/screens/add_expense_screen.dart';
+import '../../features/expense/presentation/voice/voice_capture_controller.dart';
+import '../../features/expense/presentation/voice/voice_confirmation_sheet.dart';
 import '../../features/food_recommendation/presentation/screens/food_recommendation_screen.dart';
 import '../../route.dart';
 import '../../services/auth_service.dart';
@@ -35,6 +40,13 @@ class _MainShellState extends State<MainShell> {
 
   static const _titles = ['Sovereign Guide', 'Food Recommendations', 'Add Expense', 'Budgets', 'Insights'];
 
+  // FR4.4 — hands-free wake-word ("Ok App") voice expense logging. Kept
+  // opt-in (not started automatically) since it means a persistent
+  // foreground mic listener; the toggle's chosen state is remembered across
+  // app restarts the same way GPS consent is (see AuthService.updateLocationConsent).
+  static const _handsFreePrefsKey = 'voice_hands_free_enabled';
+  late final VoiceCaptureController _voiceController;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +54,87 @@ class _MainShellState extends State<MainShell> {
     // the very first icon/color/label lookup doesn't fall back to a generic
     // placeholder while the network request is still in flight.
     CategoryService().fetchCategories();
+
+    _voiceController = VoiceCaptureController();
+    _voiceController.addListener(_onVoiceStateChanged);
+    _restoreHandsFreePreference();
+  }
+
+  Future<void> _restoreHandsFreePreference() async {
+    // WakeWordService (vosk_flutter_2) is Android-only — see its doc
+    // comment — so there's no hands-free state to restore elsewhere.
+    if (!Platform.isAndroid) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_handsFreePrefsKey) ?? false) {
+      await _voiceController.startHandsFree();
+    }
+  }
+
+  void _onVoiceStateChanged() {
+    if (!mounted) return;
+    switch (_voiceController.status) {
+      case VoiceCaptureStatus.parsed:
+      case VoiceCaptureStatus.parseFailed:
+        VoiceConfirmationSheet.show(context, _voiceController);
+      case VoiceCaptureStatus.noSpeechDetected:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Didn't catch that — say \"Ok App\" to try again.")),
+        );
+      case VoiceCaptureStatus.permissionDenied:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Microphone permission is needed for hands-free voice logging.'),
+          ),
+        );
+      case VoiceCaptureStatus.unsupportedPlatform:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hands-free listening needs Android — try the Voice button on Input instead.'),
+          ),
+        );
+      case VoiceCaptureStatus.error:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_voiceController.errorMessage ?? 'Voice listening failed.')),
+        );
+      case VoiceCaptureStatus.idle:
+      case VoiceCaptureStatus.listeningForWake:
+      case VoiceCaptureStatus.transcribing:
+        break;
+    }
+    setState(() {}); // refreshes the mic icon in the AppBar
+  }
+
+  Future<void> _toggleHandsFree() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (_voiceController.isHandsFreeActive) {
+      await _voiceController.stopHandsFree();
+      await prefs.setBool(_handsFreePrefsKey, false);
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Enable hands-free voice logging?'),
+        content: const Text(
+          'While the app is open, it will keep listening for the wake '
+          'phrase "Ok App", entirely on-device — audio never leaves your '
+          'phone. Say it followed by an expense, e.g. "Ok App, spent '
+          'twelve dollars on lunch at McDonald\'s today". Listening stops '
+          'if you close the app.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enable')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await _voiceController.startHandsFree();
+    await prefs.setBool(_handsFreePrefsKey, true);
   }
 
   void _goToGuide() => setState(() => _index = _guideIndex);
@@ -68,11 +161,34 @@ class _MainShellState extends State<MainShell> {
   void _selectTab(int index) => setState(() => _index = index);
 
   @override
+  void dispose() {
+    _voiceController.removeListener(_onVoiceStateChanged);
+    _voiceController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final handsFreeActive = _voiceController.isHandsFreeActive;
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_index]),
-        actions: [IconButton(onPressed: _logout, icon: const Icon(Icons.logout), tooltip: 'Log out')],
+        actions: [
+          // Hands-free wake-word listening (WakeWordService/vosk_flutter_2)
+          // is Android-only (see its doc comment) — the toggle isn't shown
+          // where it could only ever fail; iOS still has the Voice
+          // tap-to-talk button on the Input screen.
+          if (Platform.isAndroid)
+            IconButton(
+              onPressed: _toggleHandsFree,
+              icon: Icon(handsFreeActive ? Icons.mic : Icons.mic_off_outlined),
+              color: handsFreeActive ? AppColors.primary : null,
+              tooltip: handsFreeActive
+                  ? 'Hands-free voice logging is on — tap to turn off'
+                  : 'Turn on hands-free voice logging ("Ok App")',
+            ),
+          IconButton(onPressed: _logout, icon: const Icon(Icons.logout), tooltip: 'Log out'),
+        ],
       ),
       body: IndexedStack(
         index: _index,

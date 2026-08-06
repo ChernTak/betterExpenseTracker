@@ -11,14 +11,19 @@ import '../../../../core/widgets/labeled_field.dart';
 import '../../../../services/auto_categorization_service.dart';
 import '../../../../services/camera_service.dart';
 import '../../../../services/category_service.dart';
+import '../../../../services/expense_nlp_parser_service.dart';
 import '../../../../services/expense_service.dart';
 import '../../../../services/ocr_service.dart';
 import '../../data/datasources/ocr_datasource.dart';
+import '../../data/datasources/voice_datasource.dart';
 
-/// The "Input" tab. Manual and Scan (FR4.2/FR4.3, on-device Google ML Kit
-/// text recognition + backend parsing) are wired to the real backend; Voice
-/// capture (FR4.4) is part of the not-yet-built AI module, so it stays
-/// visible per the design spec but disabled rather than faking input.
+/// The "Input" tab. Manual, Scan (FR4.2/FR4.3, on-device Google ML Kit text
+/// recognition + backend parsing) and Voice (FR4.4, on-device speech
+/// transcription + on-device NLP extraction — see ExpenseNlpParserService)
+/// are all wired to real capture; Voice here is the tap-to-talk single-shot
+/// path that prefills this form. The separate hands-free "Ok App" wake-word
+/// flow (VoiceCaptureController) runs app-wide from MainShell and shows its
+/// own confirmation sheet instead of routing through this screen.
 class AddExpenseScreen extends StatefulWidget {
   /// Invoked after a successful save so the shell can switch back to the
   /// Guide tab. Optional so this screen can still be used standalone.
@@ -38,6 +43,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _cameraService = CameraService();
   final _ocrDatasource = OcrDatasource();
   final _ocrService = OcrService();
+  final _voiceDatasource = VoiceDatasource();
+  final _nlpParser = ExpenseNlpParserService();
   final _autoCategorizationService = AutoCategorizationService();
 
   List<CategoryItem> _categories = CategoryService.cached;
@@ -79,6 +86,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     _amountController.dispose();
     _merchantController.dispose();
     _ocrDatasource.dispose();
+    _voiceDatasource.dispose();
     super.dispose();
   }
 
@@ -146,6 +154,52 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         const SnackBar(
           content: Text('Receipt scanned — review the details before saving.'),
         ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _inputMode = 'manual');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  /// Tap-to-talk voice capture (FR4.4): listens for a single utterance via
+  /// the native on-device speech recognizer, extracts amount/merchant/date
+  /// with ExpenseNlpParserService (pure on-device regex, no network call),
+  /// and prefills this form the same way _handleScanReceipt prefills it
+  /// from OCR — the user still reviews and taps Save themselves.
+  Future<void> _handleVoiceInput() async {
+    setState(() => _inputMode = 'voice');
+    try {
+      final transcript = await _voiceDatasource.listenOnce();
+      if (transcript == null || transcript.trim().isEmpty) {
+        throw Exception("Didn't catch that — try again in a quieter spot.");
+      }
+
+      final parsed = _nlpParser.parse(transcript);
+      if (!mounted) return;
+
+      String? spokenMerchant;
+      setState(() {
+        if (parsed.amount != null) {
+          _amountController.text = parsed.amount!.toStringAsFixed(2);
+        }
+        if (parsed.merchantName != null) {
+          _merchantController.text = parsed.merchantName!;
+          spokenMerchant = parsed.merchantName;
+        }
+        if (parsed.transactionDate != null) {
+          _transactionDate = parsed.transactionDate!;
+        }
+        _inputMode = 'manual';
+      });
+
+      final categorizationInput = spokenMerchant ?? transcript;
+      _suggestCategory(categorizationInput, inputSource: 'voice');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Heard: "$transcript" — review before saving.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -272,7 +326,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     value: 'voice',
                     label: Text('Voice'),
                     icon: Icon(Icons.mic_none),
-                    enabled: false,
                   ),
                 ],
                 selected: {_inputMode},
@@ -280,6 +333,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   final mode = selection.first;
                   if (mode == 'scan') {
                     _handleScanReceipt();
+                  } else if (mode == 'voice') {
+                    _handleVoiceInput();
                   } else {
                     setState(() => _inputMode = mode);
                   }
@@ -287,16 +342,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            if (_inputMode == 'scan')
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 60),
+            if (_inputMode == 'scan' || _inputMode == 'voice')
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 60),
                 child: Column(
                   children: [
-                    CircularProgressIndicator(color: AppColors.primary),
-                    SizedBox(height: 16),
+                    const CircularProgressIndicator(color: AppColors.primary),
+                    const SizedBox(height: 16),
                     Text(
-                      'Scanning receipt…',
-                      style: TextStyle(color: AppColors.textSecondary),
+                      _inputMode == 'scan' ? 'Scanning receipt…' : 'Listening… say your expense',
+                      style: const TextStyle(color: AppColors.textSecondary),
                     ),
                   ],
                 ),

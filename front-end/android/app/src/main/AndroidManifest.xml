@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- FR4.4 — hands-free "Ok App" wake-word listening (WakeWordService)
+         and the speech_to_text handoff transcription that follows it. Scoped
+         to while the app process is alive (foreground, or briefly
+         backgrounded) rather than a full Android foreground service — see
+         WakeWordService's doc comment for why. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
         android:label="expense_tracker"
         android:name="${applicationName}"
@@ -57,6 +64,14 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
+        </intent>
+        <!-- speech_to_text (FR4.4 voice expense logging): Android 11+ package
+             visibility rules hide RecognitionService-capable components
+             (e.g. Google's on-device speech recognizer) from this app unless
+             declared here — without it, SpeechToText.initialize() silently
+             reports unavailable on affected devices. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

@@ -65,6 +65,19 @@ dependencies:
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2
 
+  # Hands-free voice expense logging (FR4.4).
+  # Wake word: fully local, grammar-restricted Vosk recognizer. Using the
+  # community-maintained vosk_flutter_2 fork, not the original vosk_flutter
+  # — the original still pins http ^0.13.5, which conflicts with this app's
+  # http ^1.2.2 (used everywhere else); vosk_flutter_2 tracks current deps.
+  vosk_flutter_2: ^1.0.5
+  # Full-vocabulary transcription after the wake word fires — native
+  # Android SpeechRecognizer / iOS SFSpeechRecognizer, free and on-device.
+  # Both this and vosk_flutter_2 request their own RECORD_AUDIO/speech
+  # permission internally (via a transitive permission_handler dependency),
+  # so no direct permission_handler calls are needed in this app's code.
+  speech_to_text: ^7.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -91,6 +104,9 @@ flutter:
   # lib/services/tier_b_inference_service.dart via tflite_flutter.
   assets:
     - assets/models/tier_b_regressor.tflite
+    # Manually downloaded — see assets/models/README.md. Not fetched by
+    # `pub get`; the app fails to start hands-free listening without it.
+    - assets/models/vosk-model-small-en-us-0.15.zip
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

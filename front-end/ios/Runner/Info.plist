@@ -72,5 +72,11 @@
 	<string>Used to pick a receipt photo from your library for OCR scanning.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Used to find nearby food options within your remaining dining budget.</string>
+	<!-- FR4.4 — hands-free "Ok App" wake-word listening (vosk_flutter_2) and
+	     the on-device transcription that follows it (speech_to_text). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Used to detect the "Ok App" wake word and to transcribe your spoken expense — both processed entirely on this device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Used to transcribe your spoken expense into text after you say "Ok App".</string>
 </dict>
 </plist>

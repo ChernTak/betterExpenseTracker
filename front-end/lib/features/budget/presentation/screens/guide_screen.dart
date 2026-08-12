@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -88,7 +90,7 @@ class _GuideScreenState extends State<GuideScreen> {
             children: [
               if (budgets.isNotEmpty) _InsightCard(budgets: budgets),
               if (budgets.isNotEmpty) const SizedBox(height: 16),
-              _MonthlyBudgetCard(totalLimit: totalLimit, totalSpent: totalSpent),
+              _MonthlyBudgetCard(totalLimit: totalLimit, totalSpent: totalSpent, budgets: budgets),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -126,13 +128,30 @@ class _GuideData {
 class _MonthlyBudgetCard extends StatelessWidget {
   final double totalLimit;
   final double totalSpent;
+  final List<dynamic> budgets;
 
-  const _MonthlyBudgetCard({required this.totalLimit, required this.totalSpent});
+  const _MonthlyBudgetCard({required this.totalLimit, required this.totalSpent, required this.budgets});
 
   @override
   Widget build(BuildContext context) {
     final pct = totalLimit > 0 ? ((totalSpent / totalLimit) * 100).clamp(0, 999).toDouble() : 0.0;
     final remaining = (totalLimit - totalSpent).clamp(0, double.infinity);
+
+    // One slice per category with spend, coloured to match that category's
+    // icon/progress-bar colour everywhere else in the app, sized by its
+    // share of totalSpent — plus a grey "remaining" slice so the ring still
+    // reads as spent-vs-limit at a glance, same as the old single-colour one.
+    final slices = <_PieSlice>[
+      for (final b in budgets)
+        if (((b as Map<String, dynamic>)['current_spend'] as num).toDouble() > 0)
+          _PieSlice(
+            color: CategoryService.lookup(b['category'] as String).color,
+            value: (b['current_spend'] as num).toDouble(),
+          ),
+    ]..sort((a, b) => b.value.compareTo(a.value));
+    if (remaining > 0) {
+      slices.add(_PieSlice(color: AppColors.surface, value: remaining.toDouble()));
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -156,12 +175,14 @@ class _MonthlyBudgetCard extends StatelessWidget {
                   SizedBox(
                     width: 140,
                     height: 140,
-                    child: CircularProgressIndicator(
-                      value: totalLimit > 0 ? (totalSpent / totalLimit).clamp(0, 1) : 0,
-                      strokeWidth: 10,
-                      backgroundColor: AppColors.surface,
-                      valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                    ),
+                    child: slices.isEmpty
+                        ? const CircularProgressIndicator(
+                            value: 0,
+                            strokeWidth: 10,
+                            backgroundColor: AppColors.surface,
+                            valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                          )
+                        : CustomPaint(painter: _PieChartPainter(slices: slices, strokeWidth: 10)),
                   ),
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -205,8 +226,116 @@ class _MonthlyBudgetCard extends StatelessWidget {
               valueColor: const AlwaysStoppedAnimation(AppColors.primary),
             ),
           ),
+          if (totalSpent > 0) ...[
+            const SizedBox(height: 16),
+            _CategoryLegend(budgets: budgets, totalSpent: totalSpent),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _PieSlice {
+  final Color color;
+  final double value;
+
+  const _PieSlice({required this.color, required this.value});
+}
+
+/// Draws each [_PieSlice] as a ring segment, clockwise from the top —
+/// a coloured-by-category alternative to the single-colour
+/// CircularProgressIndicator this replaces.
+class _PieChartPainter extends CustomPainter {
+  final List<_PieSlice> slices;
+  final double strokeWidth;
+
+  _PieChartPainter({required this.slices, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = slices.fold<double>(0, (sum, s) => sum + s.value);
+    if (total <= 0) return;
+
+    final rect = Offset.zero & size;
+    final inset = rect.deflate(strokeWidth / 2);
+    var startAngle = -math.pi / 2;
+
+    for (final slice in slices) {
+      final sweepAngle = (slice.value / total) * 2 * math.pi;
+      final paint = Paint()
+        ..color = slice.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt;
+      canvas.drawArc(inset, startAngle, sweepAngle, false, paint);
+      startAngle += sweepAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PieChartPainter oldDelegate) =>
+      oldDelegate.slices != slices || oldDelegate.strokeWidth != strokeWidth;
+}
+
+/// Colour-coded key under the pie chart — one row per category with spend,
+/// largest first, showing its share of this month's total spend.
+class _CategoryLegend extends StatelessWidget {
+  final List<dynamic> budgets;
+  final double totalSpent;
+
+  const _CategoryLegend({required this.budgets, required this.totalSpent});
+
+  @override
+  Widget build(BuildContext context) {
+    final entries =
+        budgets
+            .map((b) => b as Map<String, dynamic>)
+            .where((b) => (b['current_spend'] as num).toDouble() > 0)
+            .toList()
+          ..sort(
+            (a, b) => (b['current_spend'] as num).compareTo(a['current_spend'] as num),
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final b in entries)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Builder(
+              builder: (context) {
+                final categoryItem = CategoryService.lookup(b['category'] as String);
+                final spent = (b['current_spend'] as num).toDouble();
+                final share = totalSpent > 0 ? (spent / totalSpent) * 100 : 0.0;
+
+                return Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(color: categoryItem.color, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        categoryItem.label,
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${share.toStringAsFixed(0)}%',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }

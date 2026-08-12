@@ -16,11 +16,11 @@ import '../../services/category_service.dart';
 import '../constants/app_colors.dart';
 
 /// The post-login app shell: a single Scaffold hosting the five bottom-nav
-/// tabs (Guide/Food/Input/Budgets/Insights), each kept alive in an
+/// tabs (Guide/Budget/Input/Food/Insights), each kept alive in an
 /// IndexedStack so switching tabs doesn't refetch or lose scroll state.
 /// Input sits in a raised circular button docked in a notch of the bottom
 /// bar, matching a common banking-app layout (tab order/labels per the
-/// 2026-07-22 request — Food and Insights are placeholders/first-pass and
+/// 2026-08-12 request — Food and Insights are placeholders/first-pass and
 /// expected to be refined later).
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -31,14 +31,30 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   static const _guideIndex = 0;
-  static const _foodIndex = 1;
+  static const _budgetIndex = 1;
   static const _inputIndex = 2;
-  static const _budgetIndex = 3;
+  static const _foodIndex = 3;
   static const _insightsIndex = 4;
 
   int _index = _guideIndex;
 
-  static const _titles = ['Sovereign Guide', 'Food Recommendations', 'Add Expense', 'Budgets', 'Insights'];
+  // Measured post-frame from _bottomBarKey so the body's keyboard padding
+  // (below) can subtract it back out — the body's Scaffold-allocated area
+  // already stops above this bar regardless of keyboard, so compensating by
+  // the *full* keyboard height double-counts it and leaves a blank gap.
+  final _bottomBarKey = GlobalKey();
+  double _bottomBarHeight = 0;
+
+  void _measureBottomBar() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final height = _bottomBarKey.currentContext?.size?.height;
+      if (height != null && height != _bottomBarHeight && mounted) {
+        setState(() => _bottomBarHeight = height);
+      }
+    });
+  }
+
+  static const _titles = ['Sovereign Guide', 'Budgets', 'Add Expense', 'Food Recommendations', 'Insights'];
 
   // FR4.4 — hands-free wake-word ("Ok App") voice expense logging. Kept
   // opt-in (not started automatically) since it means a persistent
@@ -170,7 +186,19 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final handsFreeActive = _voiceController.isHandsFreeActive;
+    _measureBottomBar();
+    final keyboardPadding = (MediaQuery.of(context).viewInsets.bottom - _bottomBarHeight).clamp(
+      0.0,
+      double.infinity,
+    );
     return Scaffold(
+      // False so the bottom nav bar and the FAB docked in its notch stay
+      // pinned to the screen bottom instead of riding up with the keyboard
+      // (the default `true` resizes the whole Scaffold, including those,
+      // whenever a text field on a tab like Add Expense gets focus). The
+      // body's own Padding below still shifts scrollable content clear of
+      // the keyboard, so fields remain reachable.
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(_titles[_index]),
         actions: [
@@ -190,15 +218,18 @@ class _MainShellState extends State<MainShell> {
           IconButton(onPressed: _logout, icon: const Icon(Icons.logout), tooltip: 'Log out'),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: [
-          const GuideScreen(),
-          const FoodRecommendationScreen(),
-          AddExpenseScreen(onSaved: _goToGuide),
-          const BudgetsScreen(),
-          const InsightsScreen(),
-        ],
+      body: Padding(
+        padding: EdgeInsets.only(bottom: keyboardPadding),
+        child: IndexedStack(
+          index: _index,
+          children: [
+            const GuideScreen(),
+            const BudgetsScreen(),
+            AddExpenseScreen(onSaved: _goToGuide),
+            const FoodRecommendationScreen(),
+            const InsightsScreen(),
+          ],
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
@@ -215,6 +246,7 @@ class _MainShellState extends State<MainShell> {
       // (7px unset -> 11px @72 -> 19px @64, tested on-device); _NavBarItem
       // instead scales its own content to fit whatever height it's given.
       bottomNavigationBar: SafeArea(
+        key: _bottomBarKey,
         top: false,
         child: BottomAppBar(
           shape: const CircularNotchedRectangle(),
@@ -231,20 +263,20 @@ class _MainShellState extends State<MainShell> {
                 onTap: () => _selectTab(_guideIndex),
               ),
               _NavBarItem(
-                icon: Icons.restaurant_outlined,
-                selectedIcon: Icons.restaurant,
-                label: 'Food',
-                selected: _index == _foodIndex,
-                onTap: () => _selectTab(_foodIndex),
-              ),
-              // Space for the notch the FloatingActionButton sits in.
-              const SizedBox(width: 48),
-              _NavBarItem(
                 icon: Icons.pie_chart_outline,
                 selectedIcon: Icons.pie_chart,
                 label: 'Budget',
                 selected: _index == _budgetIndex,
                 onTap: () => _selectTab(_budgetIndex),
+              ),
+              // Space for the notch the FloatingActionButton sits in.
+              const SizedBox(width: 48),
+              _NavBarItem(
+                icon: Icons.restaurant_outlined,
+                selectedIcon: Icons.restaurant,
+                label: 'Food',
+                selected: _index == _foodIndex,
+                onTap: () => _selectTab(_foodIndex),
               ),
               _NavBarItem(
                 icon: Icons.insights_outlined,

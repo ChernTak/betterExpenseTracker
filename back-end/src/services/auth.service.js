@@ -197,7 +197,7 @@ exports.updateLocationConsent = async (req, res) => {
   }
 
   try {
-    await userModel.updateLocationConsent(req.user.userId, locationConsent);
+    await userModel.recordConsentChange(req.user.userId, 'location', locationConsent);
     return res.status(200).json({ message: 'Location consent updated', locationConsent });
   } catch (err) {
     console.error('Update location consent error', err);

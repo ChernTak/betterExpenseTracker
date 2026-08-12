@@ -96,4 +96,17 @@ class ApiEndpoints {
   static String adminDeactivateUser(String userId) => '$admin/users/$userId/deactivate';
   static String adminReactivateUser(String userId) => '$admin/users/$userId/reactivate';
   static String adminDeleteUser(String userId) => '$admin/users/$userId';
+
+  // PDPA compliance additions — deletion grace period, DSAR export, consent
+  // history and admin accountability (see back-end/src/routes/admin.routes.js)
+  static String adminCancelDeletion(String userId) => '$admin/users/$userId/cancel-deletion';
+  static String adminPurgeUser(String userId, {bool force = false}) =>
+      '$admin/users/$userId/purge${force ? '?force=true' : ''}';
+  static String adminExportUser(String userId) => '$admin/users/$userId/export';
+  static String adminConsentHistory(String userId) => '$admin/users/$userId/consent-history';
+  static String adminAuditLog() => '$admin/audit-log';
+  static String adminPurgeRecommendationLogs(int olderThanDays) =>
+      '$admin/recommendation-logs/purge?olderThanDays=$olderThanDays';
+  static String adminPurgeStaleGuests(int olderThanDays) =>
+      '$admin/guests/purge?olderThanDays=$olderThanDays';
 }

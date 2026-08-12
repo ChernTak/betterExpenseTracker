@@ -55,6 +55,11 @@ class MyApp extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(foregroundColor: AppColors.primary),
         ),
+        // Floating (not the default `fixed`) so SnackBars overlay content
+        // instead of resizing the Scaffold's bottom area — otherwise the
+        // BottomAppBar and the FAB docked in its notch get pushed up and
+        // back down every time a SnackBar shows/hides.
+        snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
       ),
       initialRoute: AppRoutes.login,
       routes: AppRoutes.routes,

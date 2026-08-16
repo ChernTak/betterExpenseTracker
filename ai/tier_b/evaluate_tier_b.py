@@ -26,7 +26,7 @@ import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
 
-BACKEND_ENV_PATH = Path(__file__).parent.parent / "back-end" / ".env"
+BACKEND_ENV_PATH = Path(__file__).parent.parent.parent / "back-end" / ".env"
 
 
 def get_connection():

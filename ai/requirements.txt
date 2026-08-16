@@ -7,3 +7,24 @@ tensorflow
 holidays
 psycopg2-binary
 python-dotenv
+
+# Lets receipt_ner_gpu_training.ipynb's data-prep cells (SROIE loading +
+# BIO alignment, ai/data/raw/SROIE2019/) run and be validated locally on
+# CPU. The notebook's actual training/conversion cells (PyTorch + HF
+# Trainer + TFLite export) are meant to run on Colab/Kaggle with a GPU and
+# install their own pinned deps in their own Cell 1 - these entries are
+# only for local dry-runs of the data-prep logic.
+# Pinned below 5.0: transformers v5 (Nov 2025) deleted every TF* model class
+# library-wide, going PyTorch-only; the notebook's TFLite conversion cell
+# needs a TF* class to exist.
+transformers<5
+# transformers' TF model classes need the standalone Keras 2 API on
+# tensorflow>=2.16, which defaults to Keras 3.
+tf-keras
+ipykernel
+# Reads each SROIE receipt's actual image width/height to normalize word
+# bounding boxes to LayoutLM's expected 0-1000 range.
+pillow
+# Draws labeled words' bounding boxes on the receipt image for the
+# preprocessing spot-check cell (Cell 2 continued).
+matplotlib

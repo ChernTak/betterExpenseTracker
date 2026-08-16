@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -14,6 +15,9 @@ import '../../../../services/category_service.dart';
 import '../../../../services/expense_nlp_parser_service.dart';
 import '../../../../services/expense_service.dart';
 import '../../../../services/ocr_service.dart';
+import '../../../../services/receipt_ner/receipt_field_extractor.dart';
+import '../../../../services/receipt_ner/receipt_field_normalizer.dart';
+import '../../../../services/receipt_ner/receipt_ner_service.dart';
 import '../../data/datasources/ocr_datasource.dart';
 import '../../data/datasources/voice_datasource.dart';
 
@@ -126,22 +130,79 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         );
       }
 
+      // Backend regex parser — unchanged call, unchanged contract. Still the
+      // sole source for subtotal/tax math validation (fields the on-device
+      // model doesn't predict) and now doubles as the per-field fallback for
+      // whatever the on-device model below doesn't find.
       final parsed = await _ocrService.parseReceipt(rawText);
+
+      // On-device LayoutLMv3 extraction — primary source when available.
+      // Never lets a problem here block the scan: no model downloaded yet,
+      // a corrupt/incomplete download, or any inference error all just mean
+      // "nothing to merge in", leaving the regex result as-is.
+      ReceiptNerFields? v3Fields;
+      RecognizedPage? page;
+      try {
+        page = await _ocrDatasource.recognizeWords(imagePath);
+        final imageBytes = await File(imagePath).readAsBytes();
+        final nerService = await ReceiptNerService.create();
+        v3Fields = nerService?.extractFields(page: page, imageBytes: imageBytes);
+      } catch (_) {
+        v3Fields = null;
+      }
+
+      if (kDebugMode) {
+        // Logged separately from the words list below (rather than combined
+        // in one line) since ML Kit can return dozens of words for a busy
+        // receipt — keeping the summary line short and grep-able, with the
+        // raw words available right below it when you need to check whether
+        // a missing field is an OCR miss (word never appears here) or a
+        // tagging miss (word's present, just not labeled COMPANY/etc.).
+        debugPrint(
+          'receipt scan — v3: '
+          '${v3Fields == null ? 'unavailable' : 'company="${v3Fields.company}" date="${v3Fields.date}" total="${v3Fields.total}" address="${v3Fields.address}"'}'
+          ' | regex: merchant="${parsed['merchant']}" date="${parsed['date']}" amount="${parsed['amount']}"',
+        );
+        if (page != null) {
+          debugPrint(
+            'receipt scan — ML Kit words (${page.words.length}, ${page.imageWidth}x${page.imageHeight}): '
+            '${page.words.map((w) => w.text).join(' | ')}',
+          );
+        }
+      }
+
       if (!mounted) return;
 
       String? scannedMerchant;
       setState(() {
         _receiptId = parsed['receiptId'] as String?;
-        final merchant = parsed['merchant'] as String?;
+
+        final regexMerchant = parsed['merchant'] as String?;
+        final merchant = (v3Fields != null && v3Fields.company.isNotEmpty)
+            ? v3Fields.company
+            : regexMerchant;
         if (merchant != null && merchant.isNotEmpty) {
           _merchantController.text = merchant;
           scannedMerchant = merchant;
         }
-        final amount = parsed['amount'] as num?;
+
+        final regexAmount = (parsed['amount'] as num?)?.toDouble();
+        final v3Amount = (v3Fields != null && v3Fields.total.isNotEmpty)
+            ? ReceiptFieldNormalizer.parseAmount(v3Fields.total)
+            : null;
+        final amount = v3Amount ?? regexAmount;
         if (amount != null) _amountController.text = amount.toStringAsFixed(2);
-        final date = parsed['date'] as String?;
+
+        final regexDate = parsed['date'] as String?;
+        final v3Date = (v3Fields != null && v3Fields.date.isNotEmpty)
+            ? ReceiptFieldNormalizer.parseDateToIso(v3Fields.date)
+            : null;
+        final date = v3Date ?? regexDate;
         final parsedDate = date != null ? DateTime.tryParse(date) : null;
         if (parsedDate != null) _transactionDate = parsedDate;
+
+        // ADDRESS is extracted by the model but has no form field yet — left
+        // unused here deliberately (see plan).
         _isMathValid = parsed['isMathValid'] as bool?;
         final computedTotal = parsed['computedTotal'];
         _computedTotal = computedTotal is num ? computedTotal.toDouble() : null;

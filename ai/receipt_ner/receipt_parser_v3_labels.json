@@ -1,0 +1,29 @@
+{
+  "labels": [
+    "O",
+    "B-COMPANY",
+    "I-COMPANY",
+    "B-DATE",
+    "I-DATE",
+    "B-ADDRESS",
+    "I-ADDRESS",
+    "B-TOTAL",
+    "I-TOTAL"
+  ],
+  "fields": [
+    "COMPANY",
+    "DATE",
+    "ADDRESS",
+    "TOTAL"
+  ],
+  "max_length": 512,
+  "cls_token_id": 0,
+  "sep_token_id": 2,
+  "pad_token_id": 1,
+  "unk_token": "<unk>",
+  "bbox_scale_max": 1000,
+  "image_size": [
+    224,
+    224
+  ]
+}

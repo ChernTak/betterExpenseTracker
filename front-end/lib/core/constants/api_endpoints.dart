@@ -51,6 +51,10 @@ class ApiEndpoints {
       '$budgets/alerts?limit=$limit';
 
   static String ocrParse() => '$ocr/parse';
+  // OTA delivery for the on-device receipt NER model (LayoutLMv3) — mirrors
+  // insightsModelVersion()/insightsModelFile()'s pattern for Tier B.
+  static String ocrModelVersion() => '$ocr/model/version';
+  static String ocrModelFile() => '$ocr/model/file';
 
   static String categoryUpdate(String id) => '$categories/$id';
   static String categoryDelete(String id) => '$categories/$id';

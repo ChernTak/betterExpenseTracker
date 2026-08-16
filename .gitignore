@@ -11,7 +11,7 @@ back-end/node_modules/
 back-end/logs/
 
 # Python
-ai/__pycache__/
+ai/**/__pycache__/
 ai/.venv/
 
 # Datasets and trained model artifacts get large fast and are
@@ -22,6 +22,12 @@ ai/data/processed/*
 !ai/data/processed/.gitkeep
 ai/models/*
 !ai/models/.gitkeep
+
+# Raw PyTorch training checkpoints (500MB+ .safetensors) for the receipt
+# NER model — regenerable via ai/receipt_ner/receipt_ner_gpu_training_v3.ipynb
+# and far over GitHub's 100MB file limit. Only the converted .tflite in
+# ai/models/ (already ignored above) is what the backend actually serves.
+ai/saved_pytorch_model*/
 
 # Copy of the trained Tier B model Flutter actually bundles (see
 # ai/train_tier_b.py) — same regenerable-artifact reasoning as ai/models/

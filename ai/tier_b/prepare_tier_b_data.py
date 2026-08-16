@@ -22,8 +22,8 @@ import holidays
 import numpy as np
 import pandas as pd
 
-RAW_PATH = Path(__file__).parent / "data" / "raw" / "berka" / "trans.csv"
-PROCESSED_PATH = Path(__file__).parent / "data" / "processed" / "tier_b_training_data.csv"
+RAW_PATH = Path(__file__).parent.parent / "data" / "raw" / "berka" / "trans.csv"
+PROCESSED_PATH = Path(__file__).parent.parent / "data" / "processed" / "tier_b_training_data.csv"
 
 # Berka's own withdrawal-type Czech labels — anything that isn't income
 # ('PRIJEM') is treated as discretionary spend for this proxy. This app has

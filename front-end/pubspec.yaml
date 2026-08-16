@@ -59,7 +59,7 @@ dependencies:
 
   # On-device inference for the Tier B spend-forecast regressor (see
   # ai/train_tier_b.py and lib/services/tier_b_inference_service.dart)
-  tflite_flutter: ^0.11.0
+  tflite_flutter: ^0.12.1
   # OTA model delivery for the above: local storage for a downloaded model
   # file, and cheap persisted state for the last-known version/check time.
   path_provider: ^2.1.4
@@ -77,6 +77,11 @@ dependencies:
   # permission internally (via a transitive permission_handler dependency),
   # so no direct permission_handler calls are needed in this app's code.
   speech_to_text: ^7.0.0
+
+  # Resize/normalize the receipt photo into the fixed 224x224 pixel_values
+  # tensor the on-device receipt NER model (LayoutLMv3) expects — see
+  # lib/services/receipt_ner/image_preprocessor.dart.
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:
@@ -107,6 +112,14 @@ flutter:
     # Manually downloaded — see assets/models/README.md. Not fetched by
     # `pub get`; the app fails to start hands-free listening without it.
     - assets/models/vosk-model-small-en-us-0.15.zip
+    # Receipt NER (LayoutLMv3) tokenizer vocab — small (~1.2MB combined),
+    # bundled directly unlike the 153MB .tflite model itself, which is
+    # OTA-only (see lib/services/receipt_ner/). Copied verbatim from
+    # ai/saved_pytorch_model_v3/{vocab.json,merges.txt} — re-copy if the
+    # model is ever retrained, since a mismatched vocab would silently
+    # produce wrong token IDs.
+    - assets/models/receipt_ner_vocab.json
+    - assets/models/receipt_ner_merges.txt
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

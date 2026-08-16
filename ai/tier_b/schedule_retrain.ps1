@@ -19,7 +19,10 @@ param(
 
 $scriptPath = $MyInvocation.MyCommand.Path
 $scriptDir = Split-Path $scriptPath -Parent
-$pythonExe = Join-Path $scriptDir ".venv\Scripts\python.exe"
+# .venv lives in ai/ (shared with the receipt-NER notebooks), one level up
+# from this script's own ai/tier_b/ location.
+$aiDir = Split-Path $scriptDir -Parent
+$pythonExe = Join-Path $aiDir ".venv\Scripts\python.exe"
 
 if ($RunJob) {
     if (-not (Test-Path $pythonExe)) {

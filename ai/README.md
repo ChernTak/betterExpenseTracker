@@ -65,7 +65,7 @@ fixed label set, not something that needs a deep learning stack or a
 GPU. `requirements.txt` reflects that (pandas + scikit-learn + joblib
 for saving the trained model).
 
-## Tier B spend forecast (prepare_tier_b_data.py / train_tier_b.py)
+## Tier B spend forecast (ai/tier_b/prepare_tier_b_data.py, train_tier_b.py)
 
 A second, unrelated model lives in this same folder: the "Tier B"
 variable/discretionary spend regressor from
@@ -133,6 +133,7 @@ python -m venv .venv
 .venv\Scripts\activate          # or: source .venv/bin/activate
 pip install -r requirements.txt
 
+cd tier_b
 python prepare_tier_b_data.py   # optional — only if you've downloaded Berka
 python train_tier_b.py          # run once (or whenever you want to retrain)
 .\schedule_retrain.ps1          # optional — automates the above two on a weekly schedule

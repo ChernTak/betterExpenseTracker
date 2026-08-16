@@ -50,14 +50,14 @@ import tensorflow as tf
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 
-PROCESSED_DATA_PATH = Path(__file__).parent / "data" / "processed" / "tier_b_training_data.csv"
+PROCESSED_DATA_PATH = Path(__file__).parent.parent / "data" / "processed" / "tier_b_training_data.csv"
 
 # Saved to both: ai/models/ is the versioned source of truth (also what the
 # backend serves for OTA downloads — see insight.routes.js), front-end/assets/
 # is the bundled offline-default copy Flutter ships inside the app itself.
 MODEL_OUTPUT_PATHS = [
-    Path(__file__).parent / "models" / "tier_b_regressor.tflite",
-    Path(__file__).parent.parent / "front-end" / "assets" / "models" / "tier_b_regressor.tflite",
+    Path(__file__).parent.parent / "models" / "tier_b_regressor.tflite",
+    Path(__file__).parent.parent.parent / "front-end" / "assets" / "models" / "tier_b_regressor.tflite",
 ]
 
 DAYS_PER_PERSONA = 200

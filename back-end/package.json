@@ -5,7 +5,8 @@
   "main": "app.js",
   "scripts": {
     "test": "jest --runInBand",
-    "seed:admin": "node database/seeds/seed_admin.js"
+    "seed:admin": "node database/seeds/seed_admin.js",
+    "seed:locations": "node database/seeds/seed_high_risk_locations.js"
   },
   "keywords": [],
   "author": "",

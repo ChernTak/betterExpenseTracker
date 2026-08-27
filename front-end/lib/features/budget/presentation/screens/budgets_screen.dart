@@ -6,10 +6,14 @@ import '../../../../core/events/expense_events.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../services/budget_service.dart';
 import '../../../../services/category_service.dart';
+import '../../../ai_insights/presentation/screens/ai_insights_screen.dart';
 import '../../../categories/presentation/screens/manage_categories_screen.dart';
+import '../../../wishlist/presentation/screens/wishlist_screen.dart';
 
-/// The "Budgets" tab: a progress tile per category budget (FR3.1-FR3.4) and
-/// the most recent 60/75/90% threshold alerts (FR3.5).
+/// The "Budgets" tab: a segmented toggle between the category limits view
+/// (progress tiles, FR3.1-FR3.4, and 60/75/90% alerts, FR3.5) and the
+/// Insights forecast (see ai_insights_screen.dart) — both are views onto the
+/// same current-month budget data, so they share this one nav slot.
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
 
@@ -18,6 +22,107 @@ class BudgetsScreen extends StatefulWidget {
 }
 
 class _BudgetsScreenState extends State<BudgetsScreen> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: _BudgetTabToggle(
+            index: _tab,
+            onChanged: (i) => setState(() => _tab = i),
+          ),
+        ),
+        Expanded(
+          child: IndexedStack(
+            index: _tab,
+            children: const [_BudgetLimitsView(), InsightsScreen()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BudgetTabToggle extends StatelessWidget {
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  const _BudgetTabToggle({required this.index, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        children: [
+          _segment(
+            label: 'Limits',
+            selected: index == 0,
+            onTap: () => onChanged(0),
+          ),
+          _segment(
+            label: 'Forecast',
+            selected: index == 1,
+            onTap: () => onChanged(1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetLimitsView extends StatefulWidget {
+  const _BudgetLimitsView();
+
+  @override
+  State<_BudgetLimitsView> createState() => _BudgetLimitsViewState();
+}
+
+class _BudgetLimitsViewState extends State<_BudgetLimitsView> {
   final _budgetService = BudgetService();
   late Future<_BudgetsData> _dataFuture;
 
@@ -54,7 +159,10 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   }
 
   Future<void> _openCreateBudgetDialog() async {
-    final saved = await showDialog<bool>(context: context, builder: (_) => const _BudgetFormDialog());
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _BudgetFormDialog(),
+    );
     if (saved == true) {
       _refresh();
       notifyExpenseDataChanged();
@@ -77,7 +185,10 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   }
 
   Future<void> _openManageCategories() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()),
+    );
   }
 
   @override
@@ -92,7 +203,12 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
           }
           if (snapshot.hasError) {
             return ListView(
-              children: [Padding(padding: const EdgeInsets.all(24), child: Text('Error: ${snapshot.error}'))],
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('Error: ${snapshot.error}'),
+                ),
+              ],
             );
           }
 
@@ -103,9 +219,17 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               if (data.alerts.isNotEmpty) ...[
-                const Text('Recent Alerts', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text(
+                  'Recent Alerts',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
                 const SizedBox(height: 8),
-                ...data.alerts.map((a) => _AlertCard(alert: a as Map<String, dynamic>)),
+                ...data.alerts.map(
+                  (a) => _AlertCard(
+                    alert: a as Map<String, dynamic>,
+                    budgets: budgets,
+                  ),
+                ),
                 const SizedBox(height: 20),
               ],
               Row(
@@ -114,18 +238,27 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
                   const Expanded(
                     child: Text(
                       'Category Budgets',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.tune, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.tune,
+                      color: AppColors.textSecondary,
+                    ),
                     tooltip: 'Manage Categories',
                     onPressed: _openManageCategories,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
+                    icon: const Icon(
+                      Icons.add_circle_outline,
+                      color: AppColors.primary,
+                    ),
                     tooltip: 'Set a new budget',
                     onPressed: _openCreateBudgetDialog,
                   ),
@@ -207,7 +340,11 @@ class _CategoryBudgetTile extends StatelessWidget {
                   CircleAvatar(
                     radius: 16,
                     backgroundColor: categoryItem.color.withValues(alpha: 0.15),
-                    child: Icon(categoryItem.icon, color: categoryItem.color, size: 16),
+                    child: Icon(
+                      categoryItem.icon,
+                      color: categoryItem.color,
+                      size: 16,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -219,7 +356,10 @@ class _CategoryBudgetTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('${pct.toStringAsFixed(0)}%', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+                  Text(
+                    '${pct.toStringAsFixed(0)}%',
+                    style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -235,7 +375,10 @@ class _CategoryBudgetTile extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 'RM ${spent.toStringAsFixed(2)} of RM ${limit.toStringAsFixed(2)}',
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -249,8 +392,29 @@ class _CategoryBudgetTile extends StatelessWidget {
 
 class _AlertCard extends StatelessWidget {
   final Map<String, dynamic> alert;
+  final List<dynamic> budgets;
 
-  const _AlertCard({required this.alert});
+  const _AlertCard({required this.alert, required this.budgets});
+
+  // Wishlist is meant to hang off a real spending nudge rather than a
+  // standalone add button (see AddToWishlistDialog's doc comment) — tapping
+  // an alert opens it prefilled with whatever category that alert's budget
+  // was for, since the alert row itself doesn't carry the category.
+  void _openAddToWishlist(BuildContext context) {
+    final budgetId = alert['budget_id'] as String?;
+    final matchingBudget = budgets.cast<Map<String, dynamic>?>().firstWhere(
+      (b) => b?['budget_id'] == budgetId,
+      orElse: () => null,
+    );
+
+    showDialog<bool>(
+      context: context,
+      builder: (_) => AddToWishlistDialog(
+        alertId: alert['alert_id'] as String?,
+        initialCategory: matchingBudget?['category'] as String?,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +444,11 @@ class _AlertCard extends StatelessWidget {
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
         ),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: AppColors.textSecondary,
+        ),
+        onTap: () => _openAddToWishlist(context),
       ),
     );
   }
@@ -312,9 +481,13 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
   void initState() {
     super.initState();
     final cachedCategories = CategoryService.cached;
-    _category = widget.category ?? (cachedCategories.isNotEmpty ? cachedCategories.first.key : 'other');
+    _category =
+        widget.category ??
+        (cachedCategories.isNotEmpty ? cachedCategories.first.key : 'other');
     _limitController = TextEditingController(
-      text: widget.initialLimit != null ? widget.initialLimit!.toStringAsFixed(2) : '',
+      text: widget.initialLimit != null
+          ? widget.initialLimit!.toStringAsFixed(2)
+          : '',
     );
   }
 
@@ -331,9 +504,15 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
     try {
       final limit = double.parse(_limitController.text);
       if (_isEditing) {
-        await _budgetService.updateBudget(widget.budgetId!, monthlyLimit: limit);
+        await _budgetService.updateBudget(
+          widget.budgetId!,
+          monthlyLimit: limit,
+        );
       } else {
-        await _budgetService.saveBudget(category: _category, monthlyLimit: limit);
+        await _budgetService.saveBudget(
+          category: _category,
+          monthlyLimit: limit,
+        );
       }
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -350,7 +529,11 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isEditing ? 'Edit ${CategoryService.lookup(_category).label} Budget' : 'Set Monthly Budget'),
+      title: Text(
+        _isEditing
+            ? 'Edit ${CategoryService.lookup(_category).label} Budget'
+            : 'Set Monthly Budget',
+      ),
       content: Form(
         key: _formKey,
         child: Column(
@@ -365,7 +548,11 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
                     .map(
                       (c) => DropdownMenuItem(
                         value: c.key,
-                        child: Text(c.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          c.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     )
                     .toList(),
@@ -375,8 +562,12 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
             TextFormField(
               controller: _limitController,
               autofocus: _isEditing,
-              decoration: const InputDecoration(labelText: 'Monthly Limit (RM)'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Monthly Limit (RM)',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               validator: Validators.validateAmount,
             ),
           ],
@@ -391,7 +582,11 @@ class _BudgetFormDialogState extends State<_BudgetFormDialog> {
           onPressed: _isSaving ? null : _handleSave,
           style: ElevatedButton.styleFrom(minimumSize: const Size(0, 40)),
           child: _isSaving
-              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Save'),
         ),
       ],

@@ -39,6 +39,14 @@ front-end/assets/models/*
 !front-end/assets/models/.gitkeep
 !front-end/assets/models/README.md
 
+# Thesis/submission material — not part of the app
+chapter5ss/
+fyp2-submission/
+
+# UI Automator debug dumps and ad-hoc test screenshots, not app artifacts
+/ui_dump*.xml
+.test-screenshots/
+
 # General
 .DS_Store
 

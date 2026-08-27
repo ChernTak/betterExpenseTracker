@@ -24,6 +24,21 @@ exports.getFoodDiningMerchantHistory = (userId) => {
   return db.query(query, [userId]);
 };
 
+// Real total spend in [monthStart, monthEndExclusive) — used by the
+// dashboard's "Available to spend" figure (budget.service.js#listBudgets).
+// Deliberately not derived from budgets.current_spend: that column only
+// updates for categories the user has actually set a budget for
+// (trg_sync_budget_spend, 012_triggers.sql, has no upsert fallback), so it
+// silently undercounts spending in unbudgeted categories.
+exports.getTotalSpentForMonth = (userId, monthStart, monthEndExclusive) => {
+  const query = `
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM expenses
+    WHERE user_id = $1 AND transaction_date >= $2 AND transaction_date < $3
+  `;
+  return db.query(query, [userId, monthStart, monthEndExclusive]);
+};
+
 exports.getExpenseById = (id, userId, callback) => {
   const query = 'SELECT * FROM expenses WHERE expense_id = $1 AND user_id = $2';
   db.query(query, [id, userId], callback);

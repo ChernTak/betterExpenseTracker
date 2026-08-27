@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/constants/api_endpoints.dart';
+import '../features/auth/domain/entities/user.dart';
 
 /// Service layer for the Auth feature.
 ///
@@ -49,7 +50,8 @@ class AuthService {
           'email': email,
           'username': username,
           'password': password,
-          if (mobileNumber != null && mobileNumber.isNotEmpty) 'mobileNumber': mobileNumber,
+          if (mobileNumber != null && mobileNumber.isNotEmpty)
+            'mobileNumber': mobileNumber,
         }),
       );
 
@@ -163,17 +165,23 @@ class AuthService {
   /// alerts (FR3.5) have somewhere to push to. Called by FcmService after login.
   Future<void> updateFcmToken(String fcmToken) async {
     final token = await getToken();
-    if (token == null) return; // not logged in yet, nothing to attach the token to
+    if (token == null)
+      return; // not logged in yet, nothing to attach the token to
 
     try {
       final response = await http.put(
         Uri.parse(ApiEndpoints.authFcmToken()),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({'fcmToken': fcmToken}),
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to register FCM token (status ${response.statusCode})');
+        throw Exception(
+          'Failed to register FCM token (status ${response.statusCode})',
+        );
       }
     } catch (e) {
       throw Exception('Error registering FCM token: $e');
@@ -189,15 +197,71 @@ class AuthService {
     try {
       final response = await http.put(
         Uri.parse(ApiEndpoints.authLocationConsent()),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({'locationConsent': consent}),
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to update location consent (status ${response.statusCode})');
+        throw Exception(
+          'Failed to update location consent (status ${response.statusCode})',
+        );
       }
     } catch (e) {
       throw Exception('Error updating location consent: $e');
+    }
+  }
+
+  /// PUT /api/auth/background-location-consent — explicit, separate opt-in
+  /// from updateLocationConsent above for the geofencing nudge feature,
+  /// since background/always-on monitoring is a bigger privacy ask than the
+  /// foreground-only food-recommendation location fetch.
+  Future<void> updateBackgroundLocationConsent(bool consent) async {
+    final token = await getToken();
+    if (token == null) return;
+
+    try {
+      final response = await http.put(
+        Uri.parse(ApiEndpoints.authBackgroundLocationConsent()),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'backgroundLocationConsent': consent}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to update background location consent (status ${response.statusCode})',
+        );
+      }
+    } catch (e) {
+      throw Exception('Error updating background location consent: $e');
+    }
+  }
+
+  /// GET /api/auth/me — for the Settings screen.
+  Future<User> fetchProfile() async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    try {
+      final response = await http.get(
+        Uri.parse(ApiEndpoints.authMe()),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        return User.fromJson(body);
+      } else {
+        throw Exception(body['message'] ?? 'Failed to fetch profile');
+      }
+    } catch (e) {
+      throw Exception('Error fetching profile: $e');
     }
   }
 

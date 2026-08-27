@@ -45,3 +45,18 @@ exports.upsertPhotoReference = ({ provider, providerPlaceId, name, lat, lng, pho
   `;
   return db.query(query, [provider, providerPlaceId, name, lat ?? null, lng ?? null, photoReference ?? null, photoApi ?? null]);
 };
+
+// venue_cache has no automatic expiry — a venue looked up once and never
+// again just sits here forever past VENUE_CACHE_TTL_DAYS, unlike
+// actively-viewed venues which self-refresh via upsertVenue/
+// upsertPhotoReference above. Admin-triggered since this app has no job
+// scheduler to run it automatically (same pattern as
+// recommendation.model.js#purgeOlderThan).
+exports.purgeStale = (days) => {
+  const query = `
+    DELETE FROM venue_cache
+    WHERE cached_at < NOW() - ($1 || ' days')::INTERVAL
+    RETURNING provider, provider_place_id
+  `;
+  return db.query(query, [days]);
+};

@@ -80,6 +80,20 @@ exports.recordConsentChange = async (userId, consentType, granted) => {
   await consentLogModel.insert(userId, consentType, granted);
 };
 
+// Separate opt-in gate for the geofencing nudge feature — background/
+// always-on location monitoring is a materially bigger privacy ask than the
+// foreground-only location_consent above, so it gets its own column rather
+// than being folded into that boolean.
+exports.updateBackgroundLocationConsent = (userId, granted) => {
+  return db.query('UPDATE users SET background_location_consent = $1 WHERE user_id = $2', [granted, userId]);
+};
+
+exports.recordBackgroundLocationConsentChange = async (userId, granted) => {
+  const consentLogModel = require('./consentLog.model');
+  await exports.updateBackgroundLocationConsent(userId, granted);
+  await consentLogModel.insert(userId, 'background_location', granted);
+};
+
 exports.updateProfile = (userId, { username, mobileNumber, profilePicture, monthlyIncome }) => {
   const query = `
     UPDATE users

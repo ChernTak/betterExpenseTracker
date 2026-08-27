@@ -1,9 +1,25 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- vosk_flutter_2's own manifest declares minSdkVersion 30; without
+         this override the manifest merger forces this app's whole minSdk up
+         to match it (see android/app/build.gradle.kts). WakeWordService
+         gates itself off below API 30 at runtime instead. -->
+    <uses-sdk tools:overrideLibrary="org.vosk.vosk_flutter" />
+
     <!-- FR4.2 — receipt photo capture for OCR -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Location-based food recommendation feature -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- High-spend-area geofencing nudge (separate background_location_consent
+         opt-in, see profile_screen.dart) — ACCESS_BACKGROUND_LOCATION lets
+         GeofenceReceiver fire even when the app isn't running; Android 10+
+         requires this as a distinct, second permission request after
+         foreground location is already granted. RECEIVE_BOOT_COMPLETED lets
+         BootReceiver re-register geofences, which the OS otherwise clears
+         on every device reboot. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- FR4.4 — hands-free "Ok App" wake-word listening (WakeWordService)
          and the speech_to_text handoff transcription that follows it. Scoped
@@ -15,7 +31,9 @@
     <application
         android:label="expense_tracker"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +61,23 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- High-spend-area geofencing nudge: fires on ENTER even if the app
+             process is dead — Play Services starts this receiver directly.
+             exported=false since only the OS (via the PendingIntent
+             GeofenceManager registers) ever needs to trigger it. -->
+        <receiver
+            android:name=".GeofenceReceiver"
+            android:exported="false" />
+
+        <!-- Re-registers geofences after a reboot clears them. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

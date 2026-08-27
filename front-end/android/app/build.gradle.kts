@@ -28,9 +28,15 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // vosk_flutter_2 (FR4.4 hands-free wake word) declares minSdkVersion
-        // 30 itself — the manifest merge fails below that. This raises the
-        // whole app's floor to Android 11, excluding Android 10 and older.
-        minSdk = 30
+        // 30 itself, which would otherwise force the whole app's floor up
+        // to Android 11 via the manifest merge. AndroidManifest.xml's
+        // tools:overrideLibrary tells the merger to trust this app's own
+        // (lower) minSdk instead — WakeWordService then gates itself off at
+        // runtime below API 30 (device_info_plus SDK_INT check) rather than
+        // risking an unverified native call into code the plugin never
+        // claimed to support there. Tap-to-talk voice (speech_to_text) has
+        // no such floor and works down to whatever minSdk is set here.
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -47,4 +53,11 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // GeofencingClient for the high-spend-area nudge (GeofenceManager.kt) —
+    // not something the geolocator plugin exposes to app-level Kotlin code,
+    // so it's declared directly here.
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }

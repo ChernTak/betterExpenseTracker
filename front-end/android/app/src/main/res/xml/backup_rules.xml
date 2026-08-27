@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-Android-12 (API <31) equivalent of data_extraction_rules.xml —
+     same exclusion, older backup API. See that file's comment for why. -->
+<full-backup-content>
+    <exclude domain="database" path="pending_voice_expenses.db" />
+</full-backup-content>

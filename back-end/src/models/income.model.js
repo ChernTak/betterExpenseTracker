@@ -22,6 +22,18 @@ exports.listIncomeForUser = (userId) => {
   return db.query(query, [userId]);
 };
 
+// Real income received in [monthStart, monthEndExclusive) — used by the
+// dashboard's "Available to spend" figure (budget.service.js#listBudgets),
+// distinct from listIncomeForUser's rolling 6-month history view.
+exports.getTotalIncomeForMonth = (userId, monthStart, monthEndExclusive) => {
+  const query = `
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM income_log
+    WHERE user_id = $1 AND received_date >= $2 AND received_date < $3
+  `;
+  return db.query(query, [userId, monthStart, monthEndExclusive]);
+};
+
 exports.updateIncome = (incomeId, userId, { amount, source, receivedDate }) => {
   const query = `
     UPDATE income_log

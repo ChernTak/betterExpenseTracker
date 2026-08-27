@@ -3,6 +3,8 @@ const userModel = require('../models/user.model');
 const auditLogModel = require('../models/auditLog.model');
 const consentLogModel = require('../models/consentLog.model');
 const recommendationModel = require('../models/recommendation.model');
+const venueModel = require('../models/venue.model');
+const photoCacheModel = require('../models/photoCache.model');
 
 const DELETION_GRACE_DAYS = Number(process.env.ADMIN_DELETION_GRACE_DAYS) || 14;
 
@@ -322,5 +324,48 @@ exports.purgeStaleGuests = async (req, res) => {
   } catch (err) {
     console.error('Admin purge stale guests error', err);
     return res.status(500).json({ message: 'Failed to purge stale guest accounts', error: err.message });
+  }
+};
+
+// venue_cache has no automatic expiry (see venue.model.js#purgeStale) — a
+// venue looked up once and never revisited just accumulates indefinitely.
+// Admin-triggered since this app has no job scheduler.
+exports.purgeVenueCache = async (req, res) => {
+  const olderThanDays = Number(req.query.olderThanDays);
+  if (!Number.isFinite(olderThanDays) || olderThanDays < 0) {
+    return res.status(400).json({ message: 'olderThanDays must be a non-negative number' });
+  }
+
+  try {
+    const result = await venueModel.purgeStale(olderThanDays);
+    await logAdminAction(req, 'purge_venue_cache', null, {
+      olderThanDays,
+      deletedCount: result.rows.length,
+    });
+    return res.status(200).json({ message: 'Stale venue cache entries purged', deletedCount: result.rows.length });
+  } catch (err) {
+    console.error('Admin purge venue cache error', err);
+    return res.status(500).json({ message: 'Failed to purge venue cache', error: err.message });
+  }
+};
+
+// photo_cache stores raw image bytes (see photoCache.model.js#purgeStale),
+// so unbounded growth here is a storage-size concern, not just row count.
+exports.purgePhotoCache = async (req, res) => {
+  const olderThanDays = Number(req.query.olderThanDays);
+  if (!Number.isFinite(olderThanDays) || olderThanDays < 0) {
+    return res.status(400).json({ message: 'olderThanDays must be a non-negative number' });
+  }
+
+  try {
+    const result = await photoCacheModel.purgeStale(olderThanDays);
+    await logAdminAction(req, 'purge_photo_cache', null, {
+      olderThanDays,
+      deletedCount: result.rows.length,
+    });
+    return res.status(200).json({ message: 'Stale photo cache entries purged', deletedCount: result.rows.length });
+  } catch (err) {
+    console.error('Admin purge photo cache error', err);
+    return res.status(500).json({ message: 'Failed to purge photo cache', error: err.message });
   }
 };

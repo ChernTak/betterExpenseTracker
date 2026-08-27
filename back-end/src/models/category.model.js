@@ -99,6 +99,19 @@ exports.deleteAndReassign = async (categoryId, userId) => {
       "UPDATE wishlist SET category = 'other', updated_at = NOW() WHERE user_id = $1 AND category = $2",
       [userId, category.key],
     );
+    // ml_model_output rows are a historical prediction record, not a
+    // user-facing categorization the way expenses/wishlist are — but they
+    // still hold the now-deleted key, so they need the same reassignment or
+    // the fk_ml_predicted_category / fk_ml_corrected_category constraints
+    // (037_category_referential_integrity.sql) block this delete.
+    await client.query(
+      "UPDATE ml_model_output SET predicted_category = 'other' WHERE user_id = $1 AND predicted_category = $2",
+      [userId, category.key],
+    );
+    await client.query(
+      "UPDATE ml_model_output SET corrected_category = 'other' WHERE user_id = $1 AND corrected_category = $2",
+      [userId, category.key],
+    );
     await client.query('DELETE FROM categories WHERE category_id = $1 AND user_id = $2', [categoryId, userId]);
 
     await client.query('COMMIT');

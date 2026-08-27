@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31+) backup/transfer config. FR4.4's offline voice
+     outbox holds raw spoken transcripts pending sync (e.g. "spent RM40 on
+     medication at the pharmacy") — excluded from both cloud backup and
+     device-to-device transfer so it doesn't leak into a Google
+     account/new-phone restore. Rows are short-lived (deleted once synced),
+     so this is defense in depth, not the primary mitigation. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="pending_voice_expenses.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="pending_voice_expenses.db" />
+    </device-transfer>
+</data-extraction-rules>

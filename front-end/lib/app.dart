@@ -9,23 +9,38 @@ class MyApp extends StatelessWidget {
   // (FR3.5) without needing a BuildContext from inside the widget tree.
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
+  // Lets NotificationHandler open AddToWishlistDialog when the user taps a
+  // budget_alert/location_nudge push notification (background or terminated
+  // app state), where there's no widget-tree BuildContext to hand it either.
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Expense Tracker',
+      debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: scaffoldMessengerKey,
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary).copyWith(
-          primary: AppColors.primary,
-          onPrimary: Colors.white,
-          surface: Colors.white,
-        ),
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          bodyMedium: TextStyle(color: AppColors.textPrimary),
-        ).apply(bodyColor: AppColors.textPrimary, displayColor: AppColors.textPrimary),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary)
+            .copyWith(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+            ),
+        textTheme:
+            const TextTheme(
+              headlineMedium: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+              bodyMedium: TextStyle(color: AppColors.textPrimary),
+            ).apply(
+              bodyColor: AppColors.textPrimary,
+              displayColor: AppColors.textPrimary,
+            ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: AppColors.textPrimary,
@@ -36,7 +51,10 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: AppColors.surface,
           hintStyle: const TextStyle(color: AppColors.textSecondary),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
@@ -48,8 +66,13 @@ class MyApp extends StatelessWidget {
             foregroundColor: Colors.white,
             elevation: 0,
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
@@ -59,7 +82,9 @@ class MyApp extends StatelessWidget {
         // instead of resizing the Scaffold's bottom area — otherwise the
         // BottomAppBar and the FAB docked in its notch get pushed up and
         // back down every time a SnackBar shows/hides.
-        snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+        ),
       ),
       initialRoute: AppRoutes.login,
       routes: AppRoutes.routes,

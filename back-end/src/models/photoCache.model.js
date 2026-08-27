@@ -18,3 +18,15 @@ exports.upsertPhoto = ({ api, photoReference, contentType, bytes }) => {
   `;
   return db.query(query, [api, photoReference, contentType, bytes]);
 };
+
+// photo_cache stores raw image bytes, so an unbounded table here is a real
+// storage-size concern, not just row count. Same rationale/pattern as
+// venue.model.js#purgeStale — admin-triggered, no job scheduler.
+exports.purgeStale = (days) => {
+  const query = `
+    DELETE FROM photo_cache
+    WHERE cached_at < NOW() - ($1 || ' days')::INTERVAL
+    RETURNING api, photo_reference
+  `;
+  return db.query(query, [days]);
+};

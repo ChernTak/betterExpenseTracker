@@ -189,6 +189,30 @@ exports.updateFcmToken = async (req, res) => {
   }
 };
 
+// Profile info for the Settings screen. password_hash is excluded, same as
+// the admin-facing queries in user.model.js.
+exports.getProfile = async (req, res) => {
+  try {
+    const result = await userModel.findById(req.user.userId);
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    return res.status(200).json({
+      userId: user.user_id,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      isGuest: user.is_guest,
+      locationConsent: user.location_consent,
+      backgroundLocationConsent: user.background_location_consent,
+      createdAt: user.created_at,
+    });
+  } catch (err) {
+    console.error('Get profile error', err);
+    return res.status(500).json({ message: 'Failed to fetch profile', error: err.message });
+  }
+};
+
 // Explicit opt-in toggle for the GPS-based food recommendation feature.
 exports.updateLocationConsent = async (req, res) => {
   const { locationConsent } = req.body;
@@ -202,6 +226,24 @@ exports.updateLocationConsent = async (req, res) => {
   } catch (err) {
     console.error('Update location consent error', err);
     return res.status(500).json({ message: 'Failed to update location consent', error: err.message });
+  }
+};
+
+// Separate opt-in toggle for the geofencing high-spend-area nudge — the
+// Android side only registers geofences and requests background location
+// permission once this is granted (see profile_screen.dart).
+exports.updateBackgroundLocationConsent = async (req, res) => {
+  const { backgroundLocationConsent } = req.body;
+  if (typeof backgroundLocationConsent !== 'boolean') {
+    return res.status(400).json({ message: 'backgroundLocationConsent must be a boolean' });
+  }
+
+  try {
+    await userModel.recordBackgroundLocationConsentChange(req.user.userId, backgroundLocationConsent);
+    return res.status(200).json({ message: 'Background location consent updated', backgroundLocationConsent });
+  } catch (err) {
+    console.error('Update background location consent error', err);
+    return res.status(500).json({ message: 'Failed to update background location consent', error: err.message });
   }
 };
 

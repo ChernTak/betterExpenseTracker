@@ -1,5 +1,6 @@
 const alertModel = require('../models/alert.mode');
 const userModel = require('../models/user.model');
+const highRiskLocationModel = require('../models/highRiskLocation.model');
 const { sendPushNotification } = require('../utils/pushNotifier');
 const { PRICE_TIER_MYR_BANDS, DEFAULT_PRICE_TIER, NUDGE_SAVINGS_THRESHOLD_MYR, MEAL_TIME_WINDOWS } = require('../config/dining');
 
@@ -46,21 +47,98 @@ exports.maybeSendLossAversionNudge = async ({ userId, budgetId, mealCap, venues 
 
   const message = buildNudgeMessage(cheapest, savings);
 
+  const alertResult = await alertModel.createAlert({
+    userId,
+    budgetId,
+    alertType: 'location_nudge',
+    message,
+  });
+  const alertId = alertResult.rows[0].alert_id;
+
   const userResult = await userModel.findById(userId);
   const fcmToken = userResult.rows[0]?.fcm_token;
 
   await sendPushNotification(fcmToken, {
     title: 'Nearby savings',
     body: message,
-    data: { type: 'location_nudge', venueId: cheapest.id, budgetId },
-  });
-
-  await alertModel.createAlert({
-    userId,
-    budgetId,
-    alertType: 'location_nudge',
-    message,
+    data: { type: 'location_nudge', venueId: cheapest.id, budgetId, alertId },
   });
 
   return { venue: cheapest, savings, message };
+};
+
+// Real-time, point-of-decision nudge: unlike checkAndSendAlerts (budget.service.js),
+// which fires only after an expense is already saved, this fires the moment the
+// Android geofencing layer reports the user has physically entered a location
+// historically associated with above-average discretionary spending — before
+// any purchase has happened. Reuses the 'location_nudge' alert_type, which is
+// already wired end-to-end into AddToWishlistDialog on the frontend.
+exports.maybeSendHighRiskLocationNudge = async ({ userId, locationId }) => {
+  const locationResult = await highRiskLocationModel.getById(locationId);
+  const location = locationResult.rows[0];
+  if (!location) return null;
+
+  // Dedupe once per user per location per day, same shape as the budget
+  // alert tiers' daily dedupe — walking past the same mall repeatedly in one
+  // day shouldn't spam a nudge every time.
+  const alreadySent = await alertModel.findRecentLocationAlert(
+    userId,
+    locationId,
+    'location_nudge',
+    startOfLocalDay(),
+  );
+  if (alreadySent.rows.length > 0) return null;
+
+  const message = `You're near ${location.name} — sometimes a spot where spending adds up. Want to line something up on your Wishlist before you decide?`;
+
+  const alertResult = await alertModel.createAlert({
+    userId,
+    locationId,
+    alertType: 'location_nudge',
+    message,
+  });
+  const alertId = alertResult.rows[0].alert_id;
+
+  const userResult = await userModel.findById(userId);
+  const fcmToken = userResult.rows[0]?.fcm_token;
+
+  await sendPushNotification(fcmToken, {
+    title: 'Heads up',
+    body: message,
+    data: { type: 'location_nudge', locationId, alertId },
+  });
+
+  return { location, message };
+};
+
+// GET /api/nudge/high-risk-locations — reference data for the Android app to
+// register as geofences once background-location consent is granted.
+exports.listHighRiskLocations = async (req, res) => {
+  try {
+    const result = await highRiskLocationModel.listAll();
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('List high-risk locations error', err);
+    return res.status(500).json({ message: 'Failed to fetch high-risk locations', error: err.message });
+  }
+};
+
+// POST /api/nudge/location-entered — called by the native Android geofencing
+// bridge when a registered geofence fires an ENTER transition.
+exports.handleLocationEntered = async (req, res) => {
+  const { locationId } = req.body;
+  if (!locationId) {
+    return res.status(400).json({ message: 'locationId is required' });
+  }
+
+  try {
+    const result = await exports.maybeSendHighRiskLocationNudge({ userId: req.user.userId, locationId });
+    if (result === null) {
+      return res.status(200).json({ message: 'No nudge sent (unknown location or already sent today)' });
+    }
+    return res.status(201).json({ message: 'Location nudge sent', data: result });
+  } catch (err) {
+    console.error('Handle location entered error', err);
+    return res.status(500).json({ message: 'Failed to process location entry', error: err.message });
+  }
 };

@@ -27,11 +27,23 @@ app.use('/api/insights', insightRoutes);
 const incomeRoutes = require('./src/routes/income.routes');
 app.use('/api/income', incomeRoutes);
 
+const goalRoutes = require('./src/routes/goal.routes');
+app.use('/api/goals', goalRoutes);
+
+const wishlistRoutes = require('./src/routes/wishlist.routes');
+app.use('/api/wishlist', wishlistRoutes);
+
 const adminRoutes = require('./src/routes/admin.routes');
 app.use('/api/admin', adminRoutes);
 
 const recommendationRoutes = require('./src/routes/recommendation.routes');
 app.use('/api/recommendations', recommendationRoutes);
+
+const configRoutes = require('./src/routes/config.routes');
+app.use('/api/config', configRoutes);
+
+const nudgeRoutes = require('./src/routes/nudge.routes');
+app.use('/api/nudge', nudgeRoutes);
 
 // `require.main === module` is only true when this file is run directly
 // (`node app.js`), not when the test suite `require`s it via supertest —

@@ -73,10 +73,19 @@ dependencies:
   vosk_flutter_2: ^1.0.5
   # Full-vocabulary transcription after the wake word fires — native
   # Android SpeechRecognizer / iOS SFSpeechRecognizer, free and on-device.
-  # Both this and vosk_flutter_2 request their own RECORD_AUDIO/speech
-  # permission internally (via a transitive permission_handler dependency),
-  # so no direct permission_handler calls are needed in this app's code.
   speech_to_text: ^7.0.0
+  # Already a transitive dependency of vosk_flutter_2 (mic/speech
+  # permission prompts) — declared directly too now that MainShell also
+  # calls openAppSettings() to help with OEM battery-optimization killing
+  # the hands-free listener.
+  permission_handler: ^11.3.1
+  # Runtime Build.VERSION.SDK_INT check — vosk_flutter_2 declares
+  # minSdkVersion 30 in its own manifest, and this app deliberately doesn't
+  # match that app-wide (see android/app/build.gradle.kts's
+  # tools:overrideLibrary comment); WakeWordService uses this to gate
+  # itself off cleanly below API 30 instead of risking an unverified native
+  # call into code the plugin never claimed to support there.
+  device_info_plus: ^12.4.0
 
   # Resize/normalize the receipt photo into the fixed 224x224 pixel_values
   # tensor the on-device receipt NER model (LayoutLMv3) expects — see

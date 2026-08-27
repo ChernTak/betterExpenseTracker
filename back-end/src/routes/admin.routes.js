@@ -21,5 +21,7 @@ router.get('/users/:userId/consent-history', adminService.getConsentHistory);
 router.get('/audit-log', adminService.getAuditLog);
 router.delete('/recommendation-logs/purge', adminService.purgeRecommendationLogs);
 router.delete('/guests/purge', adminService.purgeStaleGuests);
+router.delete('/venue-cache/purge', adminService.purgeVenueCache);
+router.delete('/photo-cache/purge', adminService.purgePhotoCache);
 
 module.exports = router;

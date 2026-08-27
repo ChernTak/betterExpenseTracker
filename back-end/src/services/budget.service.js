@@ -2,6 +2,9 @@ const budgetModel = require('../models/budget.model');
 const alertModel = require('../models/alert.mode');
 const userModel = require('../models/user.model');
 const categoryModel = require('../models/category.model');
+const incomeModel = require('../models/income.model');
+const expenseModel = require('../models/expense.model');
+const goalModel = require('../models/goal.model');
 const { sendPushNotification } = require('../utils/pushNotifier');
 
 function currentMonthYear() {
@@ -66,12 +69,36 @@ exports.listBudgets = async (req, res) => {
       { totalLimit: 0, totalSpent: 0 },
     );
 
+    // "Available to spend" — income this month minus what's already
+    // committed to goals minus real total spend (not the budget-scoped
+    // totalSpent above, which silently excludes unbudgeted categories).
+    // Ties the "pay yourself first" (Goals) / "spend what's left"
+    // (Wishlist) framing to an actual number instead of just UI copy.
+    const monthStart = new Date(Date.UTC(targetYear, targetMonth - 1, 1));
+    const monthEndExclusive = new Date(Date.UTC(targetYear, targetMonth, 1));
+    const [incomeResult, spentResult, contributionsResult] = await Promise.all([
+      incomeModel.getTotalIncomeForMonth(req.user.userId, monthStart, monthEndExclusive),
+      expenseModel.getTotalSpentForMonth(req.user.userId, monthStart, monthEndExclusive),
+      goalModel.getContributionsTotalForMonth(req.user.userId, monthStart, monthEndExclusive),
+    ]);
+    const totalIncome = Number(incomeResult.rows[0].total);
+    const totalSpentThisMonth = Number(spentResult.rows[0].total);
+    const goalContributionsThisMonth = Number(contributionsResult.rows[0].total);
+    // null (rather than a misleading negative number) when no income has
+    // been logged yet this month — the frontend prompts to log income instead.
+    const availableToSpend =
+      totalIncome > 0 ? totalIncome - goalContributionsThisMonth - totalSpentThisMonth : null;
+
     return res.status(200).json({
       month: targetMonth,
       year: targetYear,
       totalLimit: totals.totalLimit,
       totalSpent: totals.totalSpent,
       budgets,
+      totalIncome,
+      goalContributionsThisMonth,
+      totalSpentThisMonth,
+      availableToSpend,
     });
   } catch (err) {
     console.error('List budgets error', err);
@@ -174,20 +201,21 @@ exports.checkAndSendAlerts = async ({ userId, category, month, year, expenseId }
   const remaining = Math.max(Number(budget.monthly_limit) - Number(budget.current_spend), 0);
   const message = buildAlertMessage(category, alertType, remaining, utilizationPct);
 
+  const alertResult = await alertModel.createAlert({
+    userId,
+    expenseId,
+    budgetId: budget.budget_id,
+    alertType,
+    message,
+  });
+  const alertId = alertResult.rows[0].alert_id;
+
   const userResult = await userModel.findById(userId);
   const fcmToken = userResult.rows[0]?.fcm_token;
 
   await sendPushNotification(fcmToken, {
     title: 'Budget Alert',
     body: message,
-    data: { type: 'budget_alert', category, alertType, budgetId: budget.budget_id },
-  });
-
-  await alertModel.createAlert({
-    userId,
-    expenseId,
-    budgetId: budget.budget_id,
-    alertType,
-    message,
+    data: { type: 'budget_alert', category, alertType, budgetId: budget.budget_id, alertId },
   });
 };

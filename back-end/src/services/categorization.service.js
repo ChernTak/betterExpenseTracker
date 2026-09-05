@@ -16,20 +16,12 @@ function normalizeMerchantText(text) {
     .trim();
 }
 
-// A row is "custom" if its key isn't one of the 13 seeded defaults — a
-// renamed default (key is immutable, only label/icon/color change) still
-// matches its original KEYWORD_MAP/CATEGORY_DESCRIPTIONS entry, so it isn't
-// missing anything the way a genuinely new category is.
+// Custom = key not among the 13 seeded defaults; a renamed default still matches its original KEYWORD_MAP/description entry.
 function isCustomCategory(key) {
   return !CATEGORIES.includes(key);
 }
 
-// A brand-new custom category (added via Manage Categories) has no entry in
-// KEYWORD_MAP and no description embedding, so it would otherwise never be
-// auto-suggested. Its own comma-separated `keywords` plug into the cheap
-// substring pass here (checked first, since they're a more deliberate
-// signal than the global defaults); the same text (or the label, if no
-// keywords were set) also seeds the embedding fallback below.
+// New custom categories have no KEYWORD_MAP/embedding entry, so their own keywords (or label) feed both the substring pass here and the embedding fallback below.
 function buildCustomKeywordMap(customCategoryRows) {
   const map = {};
   for (const row of customCategoryRows) {
@@ -42,9 +34,7 @@ function buildCustomKeywordMap(customCategoryRows) {
   return map;
 }
 
-// First pass: cheap substring match against custom keywords, then
-// KEYWORD_MAP. Deterministic and free, so it's tried before ever touching
-// the embedding model.
+// Cheap substring match against custom keywords then KEYWORD_MAP, tried before the embedding model since it's free and deterministic.
 function matchKeyword(normalizedText, customKeywordMap) {
   for (const [keyword, category] of Object.entries(customKeywordMap)) {
     if (normalizedText.includes(keyword)) return category;
@@ -55,10 +45,7 @@ function matchKeyword(normalizedText, customKeywordMap) {
   return null;
 }
 
-// Core resolution logic, kept separate from the Express handler below so it
-// can be unit-tested or reused without an HTTP round trip. userId is
-// optional so existing callers that don't have one still work (falling back
-// to the global keyword map only, with no custom categories to consider).
+// Separated from the Express handler so it's unit-testable; userId is optional for callers with no custom categories.
 async function classifyMerchant(rawText, userId) {
   const normalized = normalizeMerchantText(rawText);
 
@@ -71,9 +58,7 @@ async function classifyMerchant(rawText, userId) {
     return { category: keywordCategory, confidence: 1, needsReview: false, source: 'keyword' };
   }
 
-  // Same signal as the keyword map above (custom keywords, falling back to
-  // the label), just embedded instead of substring-matched — this is what
-  // lets a custom category win the embedding fallback at all.
+  // Same signal as the keyword map above, just embedded instead of substring-matched, so custom categories can win the embedding fallback too.
   const customCategories = customRows.map((row) => ({
     id: row.category_id,
     key: row.key,

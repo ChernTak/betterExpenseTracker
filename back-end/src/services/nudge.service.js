@@ -4,9 +4,7 @@ const highRiskLocationModel = require('../models/highRiskLocation.model');
 const { sendPushNotification } = require('../utils/pushNotifier');
 const { PRICE_TIER_MYR_BANDS, DEFAULT_PRICE_TIER, NUDGE_SAVINGS_THRESHOLD_MYR, MEAL_TIME_WINDOWS } = require('../config/dining');
 
-// Host runs in Asia/Kuala_Lumpur (see config/db.js's DATE parser comment),
-// so plain local Date getters already give Malaysia wall-clock time — no
-// separate timezone conversion needed here.
+// Host runs in Asia/Kuala_Lumpur, so plain local Date getters already give Malaysia wall-clock time.
 function isMealTimeNow() {
   const hour = new Date().getHours();
   return MEAL_TIME_WINDOWS.some((w) => hour >= w.startHour && hour < w.endHour);
@@ -30,10 +28,7 @@ function buildNudgeMessage(venue, savings) {
   return `Save RM${savings.toFixed(0)} by eating at ${venue.name} — ${distanceLabel} away.`;
 }
 
-// Called after recommendation.service has a ranked, in-budget venue list.
-// Fires at most once per budget/day (dedupe via behavioral_alerts, same
-// pattern as budget.service.checkAndSendAlerts) and only during a
-// meal-time window, so it reads as a timely nudge rather than spam.
+// Fires at most once per budget/day and only during a meal-time window, so it reads as timely rather than spam.
 exports.maybeSendLossAversionNudge = async ({ userId, budgetId, mealCap, venues }) => {
   if (!budgetId || mealCap == null || venues.length === 0) return null;
   if (!isMealTimeNow()) return null;
@@ -67,20 +62,13 @@ exports.maybeSendLossAversionNudge = async ({ userId, budgetId, mealCap, venues 
   return { venue: cheapest, savings, message };
 };
 
-// Real-time, point-of-decision nudge: unlike checkAndSendAlerts (budget.service.js),
-// which fires only after an expense is already saved, this fires the moment the
-// Android geofencing layer reports the user has physically entered a location
-// historically associated with above-average discretionary spending — before
-// any purchase has happened. Reuses the 'location_nudge' alert_type, which is
-// already wired end-to-end into AddToWishlistDialog on the frontend.
+// Fires the moment geofencing reports entry into a high-spend location, before any purchase — unlike checkAndSendAlerts which fires after an expense is saved. Reuses the 'location_nudge' alert_type already wired to the frontend.
 exports.maybeSendHighRiskLocationNudge = async ({ userId, locationId }) => {
   const locationResult = await highRiskLocationModel.getById(locationId);
   const location = locationResult.rows[0];
   if (!location) return null;
 
-  // Dedupe once per user per location per day, same shape as the budget
-  // alert tiers' daily dedupe — walking past the same mall repeatedly in one
-  // day shouldn't spam a nudge every time.
+  // Dedupe once per user per location per day so walking past the same mall repeatedly doesn't spam nudges.
   const alreadySent = await alertModel.findRecentLocationAlert(
     userId,
     locationId,

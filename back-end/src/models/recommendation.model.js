@@ -1,9 +1,6 @@
 const db = require('../config/db');
 
-// Audit trail for each food-recommendation batch shown to a user — mirrors
-// alert.mode.js's role for behavioral_alerts. context_snapshot captures the
-// query inputs/outputs so "was this recommendation acted on" can be
-// analysed later without re-deriving it from raw expense data.
+// context_snapshot captures query inputs/outputs so "was this acted on" can be analysed later without re-deriving from raw expense data.
 exports.logRecommendation = ({ userId, title, body, contextSnapshot }) => {
   const query = `
     INSERT INTO recommendation_log (user_id, rec_type, rec_title, rec_body, context_snapshot)
@@ -13,10 +10,7 @@ exports.logRecommendation = ({ userId, title, body, contextSnapshot }) => {
   return db.query(query, [userId, title, body, JSON.stringify(contextSnapshot || {})]);
 };
 
-// PDPA data-minimization — context_snapshot carries raw GPS coordinates
-// (see recommendation.service.js), which have no business reason to be
-// retained indefinitely. Admin-triggered since this app has no job
-// scheduler to run it automatically.
+// PDPA data-minimization: context_snapshot carries raw GPS coordinates with no reason to be retained indefinitely; admin-triggered since there's no job scheduler.
 exports.purgeOlderThan = (days) => {
   const query = `
     DELETE FROM recommendation_log

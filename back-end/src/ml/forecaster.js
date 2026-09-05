@@ -1,9 +1,4 @@
-// End-of-month spend forecast — pure functions, no DB access (see
-// predictive_budgeting_engine_summary.md). Adapted for this app: there's no
-// income tracking, so "Safe-to-Spend" is driven off budgets.monthly_limit
-// instead of income, and there's no LightGBM/Python in this stack, so Tier B
-// is a day-of-week weighted average with a recent-trend multiplier rather
-// than a trained regressor.
+// End-of-month spend forecast, pure functions, no DB access. No income tracking here, so Safe-to-Spend uses budgets.monthly_limit; no LightGBM, so Tier B is a day-of-week weighted average with a trend multiplier instead of a trained regressor.
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const FIXED_VARIANCE_THRESHOLD = 0.05; // ±5%, per the doc's Tier A rule
@@ -18,13 +13,7 @@ function normalizeMerchant(merchantName) {
   return (merchantName || '').trim().toLowerCase();
 }
 
-// pg returns DATE columns as JS Dates built from LOCAL midnight (e.g.
-// '2026-06-20' becomes 2026-06-19T16:00Z on a UTC+8 host) so that its local
-// calendar fields are correct, but that means reading it back with
-// toISOString()/getUTC*() silently shifts a day whenever the server's local
-// timezone is ahead of UTC. Every date is normalized to a UTC-midnight
-// "date-only" value right at the boundary (see buildForecast) so the rest of
-// this module can safely use getUTC*()/toISOString() without redoing this.
+// pg's DATE columns are local-midnight JS Dates, which silently shift a day under getUTC*()/toISOString() in a UTC+8 host; normalize to UTC-midnight once here (see buildForecast) so the rest of the module can use them safely.
 function toDateOnly(date) {
   const d = new Date(date);
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -42,10 +31,7 @@ function stddev(values, avg) {
   return Math.sqrt(mean(values.map((v) => (v - avg) ** 2)));
 }
 
-// Groups expenses by normalized merchant name (falling back to category
-// alone when merchant_name is null, since manual entries often omit it),
-// then classifies each group as a recurring "fixed bill" when it has >=2
-// occurrences, amount variance <=5% of the mean, and a ~30-day cadence.
+// Groups by normalized merchant (falling back to category when merchant_name is null), then flags a group as a recurring fixed bill at >=2 occurrences, <=5% amount variance, and ~30-day cadence.
 function detectRecurringGroups(expenses) {
   const groups = new Map();
 
@@ -98,10 +84,7 @@ function daysInMonth(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
 }
 
-// For each detected fixed group, predicts the next due date. If that date
-// falls in the current month and hasn't happened yet, its average amount
-// counts toward fixedRemaining; if a matching transaction already landed
-// this month, it's already inside "spent so far" and isn't double counted.
+// Predicts each fixed group's next due date: if due this month and unpaid it counts toward fixedRemaining; if already paid this month it's in spent-so-far and not double counted.
 function projectFixedBills(fixedGroups, expensesThisMonth, today) {
   const monthStart = startOfMonth(today);
   const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
@@ -132,10 +115,7 @@ function projectFixedBills(fixedGroups, expensesThisMonth, today) {
   return { fixedPaidSoFar, fixedRemaining, fixedItems };
 }
 
-// Projects the rest-of-month variable (non-fixed) spend. Falls back to a
-// simple run-rate until 30 historical variable transactions exist (the
-// doc's cold-start rule), then uses a day-of-week baseline scaled by a
-// recent-trend multiplier in place of a trained regressor.
+// Rest-of-month variable spend: simple run-rate until 30 historical transactions exist, then a day-of-week baseline scaled by a recent-trend multiplier.
 function projectVariableSpend(variableExpensesHistory, variableExpensesThisMonth, today) {
   const monthStart = startOfMonth(today);
   const totalDaysInMonth = daysInMonth(today);
@@ -200,9 +180,7 @@ function projectVariableSpend(variableExpensesHistory, variableExpensesThisMonth
   };
 }
 
-// expenses: last ~4 months of a user's expenses (expense_id, amount,
-// category, merchant_name, transaction_date). budgetRows: this month's rows
-// from budgets (monthly_limit). today: a Date, injectable for testing.
+// expenses: last ~4 months (expense_id, amount, category, merchant_name, transaction_date); budgetRows: this month's monthly_limit rows; today: injectable Date for testing.
 function buildForecast({ expenses, budgetRows, today = new Date() }) {
   const normalizedToday = toDateOnly(today);
   const normalizedExpenses = expenses.map((e) => ({ ...e, transaction_date: toDateOnly(e.transaction_date) }));

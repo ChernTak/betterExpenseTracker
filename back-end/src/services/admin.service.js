@@ -8,9 +8,7 @@ const photoCacheModel = require('../models/photoCache.model');
 
 const DELETION_GRACE_DAYS = Number(process.env.ADMIN_DELETION_GRACE_DAYS) || 14;
 
-// PDPA accountability — every admin action against a user record goes
-// through here so it always lands in admin_audit_log, even if a caller
-// forgets. Failures are logged but never block the actual admin action.
+// Routes every admin action through here so it lands in admin_audit_log; logging failures never block the action.
 const logAdminAction = async (req, action, target, details) => {
   try {
     await auditLogModel.insert({
@@ -25,9 +23,7 @@ const logAdminAction = async (req, action, target, details) => {
   }
 };
 
-// FR1.7 — "The system shall allow the administrator to view ... user
-// accounts. This function is strictly reserved for complying with user data
-// deletion requests (Privacy Rights) and mitigating security threats."
+// FR1.7 — listing users is reserved for deletion requests and security threats, not general browsing.
 exports.listUsers = async (req, res) => {
   try {
     const result = await userModel.findAllForAdmin();
@@ -38,9 +34,7 @@ exports.listUsers = async (req, res) => {
   }
 };
 
-// PDPA data-minimization — the list view masks mobile_number; this is the
-// only view that returns it in full, so every call is audit-logged as a
-// deliberate "view profile" action.
+// Only view that returns the unmasked mobile_number, so every call is audit-logged.
 exports.getUser = async (req, res) => {
   try {
     const result = await userModel.findByIdForAdmin(req.params.userId);
@@ -99,11 +93,7 @@ exports.reactivateUser = async (req, res) => {
   }
 };
 
-// FR1.7 — delete request. PDPA erasure with a recoverability window: this
-// soft-deletes (deactivates + timestamps the request) rather than deleting
-// outright, so an accidental or malicious click isn't instantly
-// unrecoverable. The row is only permanently removed by purgeUser below,
-// once the grace period has elapsed.
+// PDPA erasure with a recovery window: soft-deletes now, purgeUser removes the row for good after the grace period.
 exports.deleteUser = async (req, res) => {
   const { userId } = req.params;
 
@@ -148,12 +138,7 @@ exports.cancelDeletion = async (req, res) => {
   }
 };
 
-// Permanent purge — every other table's user_id FK cascades (see
-// 024_admin_user_management.sql migration note), satisfying PDPA
-// data-deletion requests in a single statement. Blocked until
-// ADMIN_DELETION_GRACE_DAYS has passed since deleteUser's request, unless
-// explicitly forced (?force=true), since some requests do need to be
-// honoured immediately.
+// FK cascades (see 024_admin_user_management.sql) wipe all related rows in one statement; blocked until the grace period elapses unless ?force=true.
 exports.purgeUser = async (req, res) => {
   const { userId } = req.params;
   const force = req.query.force === 'true';
@@ -196,9 +181,7 @@ exports.purgeUser = async (req, res) => {
   }
 };
 
-// PDPA Access principle — lets an admin fulfil a data subject access
-// request by pulling everything the app holds on one user in a single
-// downloadable JSON payload.
+// PDPA data subject access request: dumps everything the app holds on one user as JSON.
 exports.exportUserData = async (req, res) => {
   const { userId } = req.params;
 
@@ -277,10 +260,7 @@ exports.getAuditLog = async (req, res) => {
   }
 };
 
-// PDPA data-minimization / retention — recommendation_log.context_snapshot
-// carries raw GPS coordinates (see recommendation.service.js) that have no
-// business reason to be kept indefinitely. Admin-triggered since this app
-// has no job scheduler to run it automatically.
+// context_snapshot holds raw GPS coords with no reason to keep indefinitely; admin-triggered since there's no job scheduler.
 exports.purgeRecommendationLogs = async (req, res) => {
   const olderThanDays = Number(req.query.olderThanDays);
   if (!Number.isFinite(olderThanDays) || olderThanDays < 0) {
@@ -300,12 +280,7 @@ exports.purgeRecommendationLogs = async (req, res) => {
   }
 };
 
-// PDPA storage-limitation — "Continue as Guest" mints a new users row every
-// time with no reuse and no session resume on the client (see
-// user.model.js purgeStaleGuests), so abandoned guest rows accumulate with
-// no ongoing purpose. Unlike purgeRecommendationLogs this deletes
-// identities, not just log rows, so the audit entry lists which emails were
-// purged rather than only a count.
+// Guest login mints a new row every time with no reuse, so abandoned guests pile up; unlike log purges this deletes identities, so the audit entry records the purged emails.
 exports.purgeStaleGuests = async (req, res) => {
   const olderThanDays = Number(req.query.olderThanDays);
   if (!Number.isFinite(olderThanDays) || olderThanDays < 0) {
@@ -327,9 +302,7 @@ exports.purgeStaleGuests = async (req, res) => {
   }
 };
 
-// venue_cache has no automatic expiry (see venue.model.js#purgeStale) — a
-// venue looked up once and never revisited just accumulates indefinitely.
-// Admin-triggered since this app has no job scheduler.
+// venue_cache has no automatic expiry, so stale entries just accumulate; admin-triggered since there's no job scheduler.
 exports.purgeVenueCache = async (req, res) => {
   const olderThanDays = Number(req.query.olderThanDays);
   if (!Number.isFinite(olderThanDays) || olderThanDays < 0) {

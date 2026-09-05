@@ -4,10 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for the OCR feature (FR4.2/FR4.3). The app only runs text
-/// recognition on-device (OcrDatasource, via Google ML Kit) — pulling
-/// merchant/date/amount out of that raw text is business logic, so it's
-/// sent here to the backend to parse, like every other network call.
+/// OCR feature (FR4.2/FR4.3): text recognition runs on-device (ML Kit), but parsing merchant/date/amount is business logic done server-side.
 class OcrService {
   final _authService = AuthService();
 
@@ -19,9 +16,7 @@ class OcrService {
     };
   }
 
-  /// POST /api/ocr/parse — sends the raw recognized text, gets back the
-  /// parsed merchant/date/amount plus a receiptId to link to the expense
-  /// once the user confirms and saves it.
+  /// POST /api/ocr/parse — returns parsed merchant/date/amount plus a receiptId to link once the expense is saved.
   Future<Map<String, dynamic>> parseReceipt(String rawText) async {
     try {
       final response = await http.post(

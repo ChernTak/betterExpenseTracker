@@ -7,10 +7,7 @@ import '../../../../services/food_recommendation_service.dart';
 import '../../../expense/presentation/screens/log_venue_expense_screen.dart';
 import '../widgets/venue_photo.dart';
 
-/// Small pill for the "Halal" / "Visited Nx before" callouts — same visual
-/// weight as the badges on the list card's _VenueCard, kept as a plain
-/// function here since this screen builds them inline rather than as a
-/// reusable class.
+/// Pill for "Halal" / "Visited Nx before" callouts, matching _VenueCard's badge style but built inline as a plain function here.
 Widget _venueBadge({required IconData icon, required String text}) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -29,15 +26,7 @@ Widget _venueBadge({required IconData icon, required String text}) {
   );
 }
 
-/// Venue detail screen. Takes the summary already known from the list
-/// (name/distance/price/category/lat/lng) for an instant first paint, then
-/// fetches address/phone/website/hours in the background — served from the
-/// backend's venue_cache when available, so repeat opens of a popular venue
-/// are fast and don't re-bill the provider that sourced it. No
-/// ratings/photos: those are Foursquare Premium fields, out of scope for
-/// now (see plan). Hours is a raw OSM-style string, shown as-is — no
-/// "open now" parsing (that syntax has real edge cases not worth the risk
-/// for a first pass).
+/// Shows the list's summary instantly, then fetches address/phone/website/hours in the background (cached server-side); no ratings/photos (Foursquare Premium, out of scope) and hours is shown as a raw string with no "open now" parsing.
 class VenueDetailScreen extends StatefulWidget {
   final Map<String, dynamic> venue;
 

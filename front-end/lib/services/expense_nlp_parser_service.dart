@@ -1,6 +1,4 @@
-/// Result of parsing a spoken expense transcript. [amount] is the only
-/// field callers should treat as required — everything else is a
-/// best-effort extraction that the confirmation UI lets the user fix.
+/// Result of parsing a spoken expense transcript; only [amount] is required, the rest is best-effort and user-editable.
 class ParsedVoiceExpense {
   final double? amount;
   final String? merchantName;
@@ -17,16 +15,9 @@ class ParsedVoiceExpense {
   bool get hasAmount => amount != null && amount! > 0;
 }
 
-/// On-device NLP for FR4.4 — pulls amount/merchant/date out of a spoken
-/// expense transcript entirely with local regex/string matching, no
-/// network call and no ML model (category is intentionally NOT extracted
-/// here: AutoCategorizationService already does cache-first/backend-fallback
-/// classification for Manual and OCR input, so voice reuses that same path
-/// instead of a third, drifting copy of the keyword map).
+/// On-device NLP for FR4.4 — extracts amount/merchant/date via local regex only, no network/ML; category is deliberately not extracted here since AutoCategorizationService already handles that for all input channels.
 class ExpenseNlpParserService {
-  // Small-number words the two OS speech engines sometimes emit instead of
-  // digits (Android's SpeechRecognizer does this far more than iOS's
-  // SFSpeechRecognizer, which usually already normalizes to digits).
+  // Small-number words some speech engines emit instead of digits (mostly Android's SpeechRecognizer).
   static const Map<String, int> _units = {
     'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
     'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
@@ -158,10 +149,7 @@ class ExpenseNlpParserService {
         .join(' ');
   }
 
-  /// Returns null (rather than defaulting to today) when no date phrase is
-  /// found — the backend's createExpense already defaults transaction_date
-  /// to CURRENT_DATE when omitted (see expense.model.js), so duplicating
-  /// that default here would just be a second place to keep in sync.
+  /// Returns null when no date phrase is found rather than defaulting to today — the backend already defaults transaction_date to CURRENT_DATE.
   DateTime? _extractDate(String text) {
     for (final entry in _dateKeywords) {
       if (text.contains(entry.key)) {

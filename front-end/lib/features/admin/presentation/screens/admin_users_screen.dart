@@ -8,9 +8,7 @@ import 'admin_audit_log_screen.dart';
 import 'admin_data_retention_screen.dart';
 import 'admin_user_detail_screen.dart';
 
-/// FR1.7 / use case "Manage User Account" — the System Administrator's only
-/// screen. Deliberately outside MainShell: an admin account has no expenses,
-/// budgets or goals of its own, so the four user-facing tabs don't apply.
+/// FR1.7 admin's only screen, deliberately outside MainShell since an admin account has no expenses/budgets/goals.
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
 
@@ -33,11 +31,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   void _refresh() {
-    // Must be a block body, not `setState(() => _usersFuture = ...)` — an
-    // assignment expression evaluates to the assigned value, so an arrow
-    // closure there returns the Future itself, and setState() throws at
-    // runtime ("setState() callback argument returned a Future") because it
-    // rejects any callback whose return value is a Future.
+    // Must be a block body — an arrow closure here would return the assigned Future, and setState() throws if its callback returns one.
     setState(() {
       _usersFuture = _adminService.fetchUsers();
     });

@@ -5,9 +5,7 @@ import '../../../../core/constants/category_presets.dart';
 import '../../../../core/events/category_events.dart';
 import '../../../../services/category_service.dart';
 
-/// Self-serve category management: add, rename/re-style, delete and reorder
-/// (drag handle) — every user starts with the 13 defaults seeded at signup,
-/// fully editable from here on.
+/// Self-serve category management (add/rename/delete/reorder) — users start with 13 seeded defaults, fully editable.
 class ManageCategoriesScreen extends StatefulWidget {
   const ManageCategoriesScreen({super.key});
 
@@ -182,9 +180,7 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
   }
 }
 
-/// Handles both creating a new category and editing an existing one's
-/// label/icon/color/keywords. Mirrors _BudgetFormDialog's structure in
-/// budgets_screen.dart.
+/// Creates or edits a category's label/icon/color/keywords — mirrors _BudgetFormDialog's structure.
 class _CategoryFormDialog extends StatefulWidget {
   final CategoryItem? category;
 

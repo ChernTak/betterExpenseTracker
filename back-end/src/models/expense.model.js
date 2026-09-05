@@ -11,9 +11,7 @@ exports.getExpensesByUserId = (userId, callback) => {
   db.query(query, [userId], callback);
 };
 
-// Promise-based (not callback, unlike the rest of this file) since its only
-// caller, recommendation.service.js, is async/await throughout — feeds the
-// food recommendation ranking's "you've been here before" personalization.
+// Promise-based (unlike rest of file) since its only caller is async/await throughout.
 exports.getFoodDiningMerchantHistory = (userId) => {
   const query = `
     SELECT merchant_name, COUNT(*) AS visit_count
@@ -24,12 +22,7 @@ exports.getFoodDiningMerchantHistory = (userId) => {
   return db.query(query, [userId]);
 };
 
-// Real total spend in [monthStart, monthEndExclusive) — used by the
-// dashboard's "Available to spend" figure (budget.service.js#listBudgets).
-// Deliberately not derived from budgets.current_spend: that column only
-// updates for categories the user has actually set a budget for
-// (trg_sync_budget_spend, 012_triggers.sql, has no upsert fallback), so it
-// silently undercounts spending in unbudgeted categories.
+// Deliberately not derived from budgets.current_spend, since that only updates for categories with a budget set and would undercount unbudgeted spending.
 exports.getTotalSpentForMonth = (userId, monthStart, monthEndExclusive) => {
   const query = `
     SELECT COALESCE(SUM(amount), 0) AS total
@@ -39,10 +32,7 @@ exports.getTotalSpentForMonth = (userId, monthStart, monthEndExclusive) => {
   return db.query(query, [userId, monthStart, monthEndExclusive]);
 };
 
-// Real per-category spend in [monthStart, monthEndExclusive), regardless of
-// whether the user ever set a budget for that category — lets the dashboard
-// show actual spend for unbudgeted categories instead of silently omitting
-// them (see budget.service.js#listBudgets).
+// Per-category spend regardless of whether a budget exists, so unbudgeted categories still show up on the dashboard.
 exports.getSpendByCategoryForMonth = (userId, monthStart, monthEndExclusive) => {
   const query = `
     SELECT category, SUM(amount) AS spent

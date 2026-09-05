@@ -7,11 +7,7 @@ import '../../../../services/gps_service.dart';
 import '../widgets/venue_photo.dart';
 import 'venue_detail_screen.dart';
 
-/// Food tab — real-time, budget-aware nearby food suggestions (Constraint-
-/// Driven Utility Filtering: C_meal from the remaining food_dining budget,
-/// hard radius/price filters, soft distance+price+preference ranking, all
-/// computed server-side). This screen only handles location capture,
-/// loading/error/empty states and rendering the ranked list.
+/// Nearby food suggestions ranked server-side by remaining budget and preference; this screen just handles location capture and UI states.
 class FoodRecommendationScreen extends StatefulWidget {
   const FoodRecommendationScreen({super.key});
 
@@ -21,10 +17,7 @@ class FoodRecommendationScreen extends StatefulWidget {
 
 enum _LoadState { loading, locationDenied, error, loaded }
 
-// Best Match keeps the server's score-based order as-is; the other two
-// resort the already-fetched list client-side — no network round-trip,
-// unlike cuisine/radius/halal/visitFilter which all need a fresh server
-// query since they change what's affordable/ranked in the first place.
+// Only bestMatch keeps the server's order; closest/cheapest resort client-side with no re-fetch.
 enum _SortMode { bestMatch, closest, cheapest }
 
 class _FoodRecommendationScreenState extends State<FoodRecommendationScreen> {
@@ -76,9 +69,7 @@ class _FoodRecommendationScreenState extends State<FoodRecommendationScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
 
-    // Best-effort — consent is re-sent on every load rather than cached
-    // locally, since it's a one-line PUT and keeps the backend's record
-    // authoritative without adding a settings screen for this alone.
+    // Best-effort: re-sent every load rather than cached, keeps the backend authoritative without a settings screen.
     try {
       await _authService.updateLocationConsent(true);
     } catch (_) {}
@@ -260,9 +251,7 @@ class _VenueCard extends StatelessWidget {
 
   const _VenueCard({required this.venue, required this.mealCap, required this.imageHeaders});
 
-  // Mirrors config/dining.js's PRICE_TIER_MYR_BANDS — Foursquare's price is
-  // a 1-4 categorical tier, not an exact bill amount, so this is a rough
-  // MYR approximation used only for the "you save RMx" badge.
+  // Mirrors config/dining.js's PRICE_TIER_MYR_BANDS; rough MYR ranges for Foursquare's 1-4 tier, used only for the savings badge.
   static const _bands = {
     1: (min: 0.0, max: 15.0),
     2: (min: 15.0, max: 30.0),
@@ -435,9 +424,7 @@ class _CenteredMessage extends StatelessWidget {
   }
 }
 
-/// Small pill used for both the "Visited Nx" and "Save ~RMx" callouts on a
-/// venue card — same visual weight, `icon` optional so the savings one
-/// stays text-only like it always has.
+/// Shared pill for "Visited Nx" and "Save ~RMx" callouts; icon optional so the savings one stays text-only.
 class _Badge extends StatelessWidget {
   final String text;
   final IconData? icon;
@@ -480,12 +467,7 @@ class _FilterResult {
   });
 }
 
-/// All five filter controls behind one sheet rather than inline above the
-/// list — five controls at once (cuisine, radius, halal, visit-history,
-/// sort) would recreate the "cluttered" feel already flagged as feedback.
-/// Sort is the one control that lives outside this sheet (see
-/// _FoodRecommendationScreenState._buildLoaded) since it's a client-side
-/// resort of already-fetched data, not a new server query like these four.
+/// Cuisine/radius/halal/visit-history filters live in one sheet to avoid feeling cluttered; sort stays outside since it's a client-side resort, not a new query.
 class _FilterSheet extends StatefulWidget {
   final Set<String> initialCuisines;
   final double initialRadiusM;
@@ -504,9 +486,7 @@ class _FilterSheet extends StatefulWidget {
 }
 
 class _FilterSheetState extends State<_FilterSheet> {
-  // Mirrors config/dining.js's FOOD_CATEGORIES.overpass — the canonical
-  // cuisine vocabulary shared with the backend's substring-matched
-  // prefScore, not a separately invented list.
+  // Mirrors config/dining.js's FOOD_CATEGORIES.overpass so it matches the backend's prefScore vocabulary.
   static const _cuisineOptions = [
     ('restaurant', 'Restaurant'),
     ('fast_food', 'Fast Food'),

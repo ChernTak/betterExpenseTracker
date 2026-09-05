@@ -3,19 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/constants/app_colors.dart';
 
-/// Renders a venue's Google Places photo (proxied through our own backend —
-/// see recommendation.service.js#getVenuePhoto — so the Google API key
-/// never reaches the client), falling back to a plain category-style icon
-/// when there's no photo or the request fails. `authHeaders` is passed in
-/// rather than fetched here so a list of these doesn't each hit secure
-/// storage separately — the parent screen fetches it once.
+/// Renders a venue's Google Places photo proxied through our backend (keeps the API key off the client), falling back to a category icon on no-photo/error. `authHeaders` is passed in rather than fetched here so a list of these doesn't hit secure storage separately.
 class VenuePhoto extends StatelessWidget {
   final String? photoPath;
   final Map<String, String>? authHeaders;
-  // `size` is the shorthand for a square thumbnail (venue cards); pass
-  // `width`/`height` separately instead for a rectangular banner (venue
-  // detail screen) — either way the fallback icon scales off whichever is
-  // smaller, so it never overflows a short-but-wide banner.
+  // `size` is a square thumbnail shorthand; pass `width`/`height` for a rectangular banner instead.
   final double size;
   final double? width;
   final double? height;

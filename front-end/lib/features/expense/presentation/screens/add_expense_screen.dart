@@ -22,34 +22,13 @@ import '../../data/datasources/ocr_datasource.dart';
 import '../../data/datasources/voice_datasource.dart';
 import '../voice/voice_capture_controller.dart';
 
-/// The "Input" tab. Manual, Scan (FR4.2/FR4.3, on-device Google ML Kit text
-/// recognition + backend parsing) and Voice (FR4.4, on-device speech
-/// transcription + on-device NLP extraction — see ExpenseNlpParserService)
-/// are all wired to real capture; Voice here is the tap-to-talk single-shot
-/// path that prefills this form. The separate hands-free "Ok App" wake-word
-/// flow (VoiceCaptureController) runs app-wide from MainShell and shows its
-/// own confirmation sheet instead of routing through this screen — but it's
-/// still passed in here (see [voiceController]) because it and this
-/// screen's tap-to-talk button are two independent microphone consumers.
+/// The "Input" tab: Manual, Scan and Voice all prefill this form. Voice here is tap-to-talk single-shot; the separate hands-free wake-word flow (VoiceCaptureController) runs its own confirmation sheet but is passed in as [voiceController] since both share the mic.
 class AddExpenseScreen extends StatefulWidget {
   /// Invoked after a successful save so the shell can switch back to the
   /// Guide tab. Optional so this screen can still be used standalone.
   final VoidCallback? onSaved;
 
-  /// MainShell's shared hands-free controller, so _handleVoiceInput can
-  /// pause wake-word listening while this screen's own tap-to-talk capture
-  /// is running. Optional so this screen still works standalone (e.g. in a
-  /// test) — without it, tap-to-talk simply can't coordinate with
-  /// hands-free, which is only a problem if hands-free happens to be
-  /// running at the same time.
-  ///
-  /// Confirmed on a physical device: with hands-free left on, tapping Voice
-  /// here silently never reached the native speech recognizer at all —
-  /// Vosk's AudioTrack session kept holding the microphone throughout (only
-  /// one consumer can hold it at a time), so speech_to_text just never got
-  /// anything. This looked identical to "the recognizer doesn't work" from
-  /// the user's side, but was really "the microphone was still owned by
-  /// someone else."
+  /// MainShell's hands-free controller, so tap-to-talk can pause wake-word listening — otherwise Vosk keeps holding the mic and speech_to_text silently never gets anything. Optional for standalone use.
   final VoiceCaptureController? voiceController;
 
   const AddExpenseScreen({super.key, this.onSaved, this.voiceController});
@@ -76,19 +55,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   DateTime _transactionDate = DateTime.now();
   bool _isSaving = false;
 
-  // True while the current _category is an auto-suggestion rather than an
-  // explicit user pick, so we know whether the next chip tap is a
-  // "correction" worth caching (AutoCategorizationService.recordCorrection).
+  // True while _category is an auto-suggestion, so the next chip tap can be cached as a correction.
   bool _categorySuggested = false;
 
   // Set once a scanned receipt is parsed, so _handleSave can link the
   // ocr_receipts audit row to the expense once the user confirms it.
   String? _receiptId;
 
-  // Backend's subtotal+tax+rounding cross-check (FR4.3) on the last scanned
-  // receipt. null = not checked, or the receipt didn't itemize enough to
-  // validate; false = the printed total didn't reconcile with its own parts,
-  // so _MathMismatchBanner prompts the user to double-check before saving.
+  // Backend's subtotal+tax+rounding cross-check: null = not checked/insufficient data, false = mismatch (triggers _MathMismatchBanner).
   bool? _isMathValid;
   double? _computedTotal;
 
@@ -118,9 +92,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     if (!mounted) return;
     setState(() {
       _categories = categories;
-      // The previously selected category may no longer exist (e.g. deleted
-      // from Manage Categories while this screen was open) — fall back to
-      // the first available one rather than leaving a stale chip selected.
+      // Previously selected category may have been deleted elsewhere; fall back to the first available one.
       if (categories.isNotEmpty && !categories.any((c) => c.key == _category)) {
         _category = categories.first.key;
       }
@@ -130,10 +102,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   Future<void> _handleScanReceipt() async {
     setState(() => _inputMode = 'scan');
     try {
-      // ML Kit's document scanner (bounding-box edge detection, perspective
-      // correction, cropping, auto-rotation) only ships an Android
-      // implementation — iOS/macOS/etc. fall back to the plain camera
-      // capture so Scan still works everywhere, just without those extras.
+      // ML Kit's document scanner is Android-only; other platforms fall back to a plain camera capture.
       final imagePath = Platform.isAndroid
           ? (await _ocrDatasource.scanDocument())?.path
           : await _cameraService.captureReceiptPhoto();
@@ -149,16 +118,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         );
       }
 
-      // Backend regex parser — unchanged call, unchanged contract. Still the
-      // sole source for subtotal/tax math validation (fields the on-device
-      // model doesn't predict) and now doubles as the per-field fallback for
-      // whatever the on-device model below doesn't find.
+      // Backend regex parser: still the only source for math validation, and the per-field fallback for the on-device model below.
       final parsed = await _ocrService.parseReceipt(rawText);
 
-      // On-device LayoutLMv3 extraction — primary source when available.
-      // Never lets a problem here block the scan: no model downloaded yet,
-      // a corrupt/incomplete download, or any inference error all just mean
-      // "nothing to merge in", leaving the regex result as-is.
+      // On-device LayoutLMv3 extraction, primary source when available; any failure here just leaves the regex result as-is.
       ReceiptNerFields? v3Fields;
       RecognizedPage? page;
       try {
@@ -171,12 +134,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       }
 
       if (kDebugMode) {
-        // Logged separately from the words list below (rather than combined
-        // in one line) since ML Kit can return dozens of words for a busy
-        // receipt — keeping the summary line short and grep-able, with the
-        // raw words available right below it when you need to check whether
-        // a missing field is an OCR miss (word never appears here) or a
-        // tagging miss (word's present, just not labeled COMPANY/etc.).
+        // Logged separately from the words list so the summary stays short and grep-able even for a busy receipt.
         debugPrint(
           'receipt scan — v3: '
           '${v3Fields == null ? 'unavailable' : 'company="${v3Fields.company}" date="${v3Fields.date}" total="${v3Fields.total}" address="${v3Fields.address}"'}'
@@ -248,22 +206,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Future<void> _stopListening() => _voiceDatasource.stop();
 
-  /// Tap-to-talk voice capture (FR4.4): listens for a single utterance via
-  /// on-device speech recognition (see [_listenOnce]), extracts
-  /// amount/merchant/date with ExpenseNlpParserService (pure on-device
-  /// regex, no network call), and prefills this form the same way
-  /// _handleScanReceipt prefills it from OCR — the user still reviews and
-  /// taps Save themselves.
+  /// Tap-to-talk voice capture: listens once, extracts fields on-device via ExpenseNlpParserService, and prefills the form for the user to review and save.
   Future<void> _handleVoiceInput() async {
     setState(() => _inputMode = 'voice');
 
-    // Hands-free wake-word listening and this tap-to-talk capture are two
-    // independent microphone consumers — only one can hold the mic at a
-    // time, so leaving hands-free running here means this capture never
-    // actually gets a turn (see the class doc comment on [voiceController]
-    // for how this was confirmed). Pause it for the duration of this
-    // capture, and only resume it afterward if it was genuinely running
-    // before — never turn it on for a user who had it off.
+    // Hands-free and tap-to-talk share one mic, so pause hands-free during this capture and only resume it if it was already running.
     final voiceController = widget.voiceController;
     final wasHandsFreeActive = voiceController?.isHandsFreeActive ?? false;
     if (wasHandsFreeActive) await voiceController!.stopHandsFree();
@@ -309,9 +256,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
-  /// Asks AutoCategorizationService to suggest a category for [merchantText]
-  /// (cache-first, keyword-first, embedding-fallback) and, if still on this
-  /// screen, updates the selected chip to match.
+  /// Asks AutoCategorizationService to suggest a category for [merchantText] and updates the selected chip.
   Future<void> _suggestCategory(
     String merchantText, {
     required String inputSource,
@@ -452,12 +397,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       _inputMode == 'scan' ? 'Scanning receipt…' : 'Listening… say your expense',
                       style: const TextStyle(color: AppColors.textSecondary),
                     ),
-                    // Scanning has no equivalent — it's a single OCR call
-                    // with no long listening window to cut short. Voice
-                    // otherwise waits out the full listenFor/pauseFor
-                    // timeout on every attempt even after the user's
-                    // already finished talking, which is dead time worth
-                    // letting them skip.
+                    // Scan has no equivalent (single OCR call); voice needs it so users can skip waiting out the full listen timeout.
                     if (_inputMode == 'voice') ...[
                       const SizedBox(height: 8),
                       const Text(
@@ -519,10 +459,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ),
                       selected: selected,
                       onSelected: (_) {
-                        // A tap on a different chip while the current
-                        // category is still an unconfirmed suggestion means
-                        // the user is fixing it — worth caching so this
-                        // merchant categorizes correctly next time.
+                        // Tapping a different chip while the category is still a suggestion means the user is correcting it; cache that.
                         if (_categorySuggested &&
                             c.key != _category &&
                             _merchantController.text.trim().isNotEmpty) {
@@ -652,10 +589,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 }
 
-/// Shown after a scan when the backend's subtotal+tax+rounding cross-check
-/// (FR4.3) didn't reconcile with the printed total — a misread digit or a
-/// missed tax line is a likely cause, so this surfaces the reconciled
-/// figure as a one-tap fix rather than silently trusting either number.
+/// Shown when the receipt's math cross-check doesn't reconcile with the printed total, offering the reconciled figure as a one-tap fix.
 class _MathMismatchBanner extends StatelessWidget {
   final double computedTotal;
   final VoidCallback onUseSuggested;
@@ -717,10 +651,7 @@ class _MathMismatchBanner extends StatelessWidget {
   }
 }
 
-/// A general reminder banner in the expense input screen's "smart
-/// suggestion" slot. It is deliberately generic rather than pretending to be
-/// personalized — real spending-pattern suggestions are Module 2 (AI
-/// Insights), which isn't built yet.
+/// Generic reminder banner; deliberately not personalized since real spending-pattern suggestions (Module 2) aren't built yet.
 class _SmartSuggestionBanner extends StatelessWidget {
   final String category;
 

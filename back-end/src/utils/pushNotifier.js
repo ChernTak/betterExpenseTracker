@@ -1,9 +1,7 @@
 const { getMessaging } = require('firebase-admin/messaging');
 const { app, isConfigured } = require('../config/firebase');
 
-// FCM push delivery for budget alerts (FR3.5). Mirrors utils/mailer.js: if
-// Firebase isn't configured (or the user has no token yet), log instead of
-// throwing so the request that triggered the alert still succeeds (NFR 4.3).
+// FCM push for budget alerts; if unconfigured or no token, log instead of throwing so the triggering request still succeeds.
 exports.sendPushNotification = async (fcmToken, { title, body, data }) => {
   if (!isConfigured || !fcmToken) {
     console.log(`[DEV] Push notification for token=${fcmToken || 'none'}: ${title} — ${body}`);

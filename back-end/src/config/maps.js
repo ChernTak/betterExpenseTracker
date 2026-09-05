@@ -1,18 +1,9 @@
-// 3-tier venue-search fallback pipeline: OSM/Overpass (free) -> Geoapify
-// (free tier) -> Foursquare (existing, metered). Every radius/limit/
-// timeout/category/price-tier value used below arrives as an explicit
-// function parameter — config/dining.js is the only place a fallback
-// literal is allowed to live (see its header comment). recommendation.
-// service.js assembles `query`/`options` once per request and passes them
-// down through location.service.js#findNearbyVenues into searchVenues here.
+// 3-tier venue-search fallback pipeline: OSM/Overpass (free) -> Geoapify (free tier) -> Foursquare (metered); all tunables arrive as parameters from config/dining.js, never inline literals.
 
 const FSQ_API_KEY = process.env.FSQ_API_KEY;
 const GEOAPIFY_API_KEY = process.env.GEOAPIFY_API_KEY;
 
-// Foursquare retired api.foursquare.com/v3/places/search (410 Gone as of
-// 2026-07-22, pointing at their migration guide) in favour of this host.
-// The Places API also requires a dated version header on every request —
-// confirmed live: omitting it 400s with "Please provide a valid version.".
+// Foursquare retired the old v3 search endpoint (410 Gone as of 2026-07-22) for this host, which also requires a dated version header or it 400s.
 const FSQ_BASE_URL = 'https://places-api.foursquare.com/places';
 const FSQ_API_VERSION = '2025-06-17';
 const GEOAPIFY_BASE_URL = 'https://api.geoapify.com/v2/places';
@@ -35,9 +26,7 @@ function fsqHeaders() {
   };
 }
 
-// Every provider fetch is timeout-bounded so one slow/unreachable tier
-// (Overpass's public instance especially) can't hang the whole pipeline —
-// caught by searchVenues same as any other per-tier failure.
+// Timeout-bounds every provider fetch so one slow/unreachable tier can't hang the whole pipeline.
 async function fetchWithTimeout(url, fetchOptions, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -48,9 +37,7 @@ async function fetchWithTimeout(url, fetchOptions, timeoutMs) {
   }
 }
 
-// Maps every provider's field names onto one unified shape. `defaultPriceTier`
-// is a parameter (never a literal) — the spec's requirement that a missing
-// price falls back to a configurable value, not a hardcoded number.
+// Maps every provider's field names onto one unified shape; defaultPriceTier is a parameter so a missing price falls back to a configurable value, not a hardcoded one.
 function normalizeVenue(raw, provider, { defaultPriceTier }) {
   return {
     id: raw.id,
@@ -65,29 +52,19 @@ function normalizeVenue(raw, provider, { defaultPriceTier }) {
     website: raw.website ?? null,
     hours: raw.hours ?? null,
     categories: raw.categories ?? [],
-    // null (not false) when the tag is simply absent — sparse in practice
-    // (confirmed live: 0 of 20 real venues near KL Sentral had it set at
-    // all), and absence means "unknown", not "not halal". Never inferred
-    // from category/cuisine text — only ever a provider's own explicit tag.
+    // null (not false) when the tag is absent — absence means "unknown", not "not halal", and is never inferred from category/cuisine text.
     dietary: { halal: raw.halal ?? null },
   };
 }
 
-// OSM's diet:* tagging convention (used directly by Overpass, passed through
-// unprefixed by Geoapify's datasource.raw — confirmed live) — 'yes'/'only'
-// mean halal-compliant, 'no' is an explicit negative, anything else/absent
-// is unknown rather than assumed either way.
+// OSM's diet:* convention: 'yes'/'only' mean halal, 'no' is explicit negative, anything else/absent is unknown.
 function parseHalalTag(value) {
   if (value === 'yes' || value === 'only') return true;
   if (value === 'no') return false;
   return null;
 }
 
-// ---------------------------------------------------------------------
-// Tier 1: OSM / Overpass — free, no API key, no price data, no native
-// distance (both are filled in later by location.service.js's Haversine
-// fallback / normalizeVenue's defaultPriceTier).
-// ---------------------------------------------------------------------
+// Tier 1: OSM/Overpass — free, no API key, no price/distance data (filled in later by location.service.js's Haversine fallback / defaultPriceTier).
 async function searchOverpass(query, options) {
   const { lat, lng, radiusM, categories, resultLimit } = query;
   const { overpassApiUrl, overpassTimeoutMs, defaultPriceTier } = options;
@@ -104,11 +81,7 @@ out body ${resultLimit};`;
     {
       method: 'POST',
       body: `data=${encodeURIComponent(ql)}`,
-      // Overpass's public instance 406s without both of these — confirmed
-      // live. Accept: Node's fetch sends none by default. User-Agent:
-      // Overpass's Apache config appears to bot-block Node's default/empty
-      // one; a descriptive UA is also Overpass's own usage-policy etiquette,
-      // not just a technical workaround.
+      // Overpass's public instance 406s without both Accept and a descriptive User-Agent (Node sends neither by default).
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
@@ -168,11 +141,7 @@ out body;`;
     {
       method: 'POST',
       body: `data=${encodeURIComponent(ql)}`,
-      // Overpass's public instance 406s without both of these — confirmed
-      // live. Accept: Node's fetch sends none by default. User-Agent:
-      // Overpass's Apache config appears to bot-block Node's default/empty
-      // one; a descriptive UA is also Overpass's own usage-policy etiquette,
-      // not just a technical workaround.
+      // Overpass's public instance 406s without both Accept and a descriptive User-Agent (Node sends neither by default).
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
@@ -215,9 +184,7 @@ out body;`;
   );
 }
 
-// ---------------------------------------------------------------------
 // Tier 2: Geoapify — free tier, no-ops gracefully if unconfigured.
-// ---------------------------------------------------------------------
 async function searchGeoapify(query, options) {
   if (!geoapifyIsConfigured) return { venues: [], status: 'unconfigured' };
 
@@ -304,14 +271,7 @@ async function getGeoapifyPlaceDetail(providerPlaceId, options) {
   );
 }
 
-// ---------------------------------------------------------------------
-// Tier 3: Foursquare — existing integration, now taking radius/categories/
-// limit/timeout as explicit fields off query/options instead of inline
-// literals. Deliberately requests no extra `fields` on the detail lookup —
-// the default response already includes name/location/tel/website/
-// categories/price on the free tier; hours/rating/photos are Premium
-// fields and are not requested (confirmed live: 402s without paid credits).
-// ---------------------------------------------------------------------
+// Tier 3: Foursquare — requests no extra `fields`; hours/rating/photos are Premium and 402 without paid credits, so only the free-tier default fields are used.
 async function searchFoursquare(query, options) {
   if (!fsqIsConfigured) return { venues: [], status: 'unconfigured' };
 
@@ -385,9 +345,7 @@ async function getFoursquarePlaceDetail(providerPlaceId, options) {
   );
 }
 
-// Merge-and-accumulate dedup: cross-provider IDs never collide meaningfully
-// (different ID formats entirely), so "the same real venue" is detected by
-// name + proximity instead. Keeps the first (higher-priority-tier) copy.
+// Cross-provider IDs never collide meaningfully, so dedup by name + proximity instead, keeping the first (higher-priority-tier) copy.
 function mergeUnique(existing, incoming) {
   const merged = [...existing];
   for (const candidate of incoming) {
@@ -407,10 +365,7 @@ function mergeUnique(existing, incoming) {
   return merged;
 }
 
-// Local Haversine (rather than importing location.service.js here) keeps
-// maps.js's only dependency direction downward from location.service.js,
-// not circular — this is purely for de-dup distance, not the authoritative
-// distanceM used for ranking/radius filtering.
+// Local Haversine (not imported from location.service.js, to avoid a circular dependency) — only for de-dup distance, not the authoritative ranking/filtering distanceM.
 function haversineQuick(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -420,11 +375,7 @@ function haversineQuick(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Pipeline entrypoint: tries each tier in order, merging results into the
-// running total, stopping once options.minResultThreshold is met. A
-// provider that throws or is unconfigured never aborts the pipeline — it's
-// recorded in providerStatus and the next tier is tried. Returns whatever
-// was collected, best-available, even if no tier alone met the threshold.
+// Tries each tier in order until options.minResultThreshold is met; a tier that throws or is unconfigured is recorded in providerStatus and skipped, never aborting the pipeline.
 exports.searchVenues = async (query, options) => {
   const tiers = [
     { name: 'overpass', run: () => searchOverpass(query, options).then((venues) => ({ venues, status: 'ok' })) },

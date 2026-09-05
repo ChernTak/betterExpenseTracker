@@ -1,15 +1,11 @@
-"""Reshapes the real Berka dataset (PKDD'99 Financial Dataset — ~1,000,000
-real, anonymized Czech bank transactions across ~4,500 accounts) into the
-daily per-account features Tier B trains on — see train_tier_b.py and
-predictive_budgeting_engine_summary.md.
+"""Turns the raw Berka bank-transaction dataset into the daily per-account
+features Tier B trains on (see train_tier_b.py).
 
-Berka isn't bundled with this repo — Kaggle requires an authenticated
-download. Grab "The Berka Dataset" yourself and place its `trans.csv` at
-ai/data/raw/berka/trans.csv before running this script:
+Kaggle needs a login to download Berka, so grab it yourself and drop
+trans.csv at ai/data/raw/berka/trans.csv:
     https://www.kaggle.com/datasets/marceloventura/the-berka-dataset
 
-train_tier_b.py falls back to synthetic data if you skip this step, so it's
-optional, not required for the pipeline to run.
+Optional - train_tier_b.py just falls back to synthetic data if you skip it.
 
 Usage:
     python prepare_tier_b_data.py
@@ -25,31 +21,10 @@ import pandas as pd
 RAW_PATH = Path(__file__).parent.parent / "data" / "raw" / "berka" / "trans.csv"
 PROCESSED_PATH = Path(__file__).parent.parent / "data" / "processed" / "tier_b_training_data.csv"
 
-# Berka's own withdrawal-type Czech labels — anything that isn't income
-# ('PRIJEM') is treated as discretionary spend for this proxy. This app has
-# no income tracking either (see forecaster.js), so "spend" here mirrors
-# that same expenses-only framing.
+# Berka's withdrawal-type labels - anything that isn't income (PRIJEM) counts as spend, same expenses-only framing this app uses (see forecaster.js).
 WITHDRAWAL_TYPES = {"VYDAJ", "VYBER"}
 
-# Must match FEATURE_COLUMNS in train_tier_b.py — the processed CSV's
-# columns are what that script trains on directly.
-#
-# Everything here is a RATIO relative to each account's own trailing 90-day
-# average, not an absolute currency amount. Berka's amounts are in 1990s
-# Czech koruna; this app's users spend in Malaysian ringgit — a model that
-# predicts an absolute amount learned from one currency/scale would be
-# meaningless applied to a completely different one. Ratios relative to an
-# account's own baseline are scale-invariant, so the same trained model
-# transfers sensibly regardless of the absolute numbers involved. The
-# on-device Dart inference (tier_b_inference_service.dart) must compute the
-# same ratios (relative to that real user's own roll_90d_avg) and multiply
-# the model's predicted ratio back by that baseline to get a real amount.
-#
-# days_to_holiday uses Czech public holidays here (this is Czech data) and
-# hardcoded Malaysian fixed-date holidays on the Dart side — the actual
-# calendar dates differ by country, but the *feature concept* ("proximity
-# to a holiday changes spending") transfers, same reasoning already used
-# for days_since_payday.
+# Must match FEATURE_COLUMNS in train_tier_b.py. Everything here is a ratio vs each account's own 90-day baseline, not a raw amount, since Berka's in Czech koruna and users spend in ringgit - a ratio-based model transfers, an absolute-amount one wouldn't. days_to_holiday uses Czech holidays here and Malaysian ones on the Dart side, same idea either way.
 FEATURE_COLUMNS = [
     "roll_3d_ratio",
     "roll_7d_ratio",
@@ -63,29 +38,13 @@ FEATURE_COLUMNS = [
     "days_to_holiday",
     "days_remaining_ratio",
 ]
-# The target is now the WHOLE REMAINING MONTH's spend (as of that row's
-# day), not a single day's — see remaining_month_ratio() below. This lets
-# inference make one direct prediction instead of walking forward
-# day-by-day and accumulating error along the way.
+# Target is the whole remaining month's spend, not just one day - lets inference predict directly instead of walking forward and accumulating error.
 TARGET_COLUMN = "remaining_month_ratio"
 
 MIN_DAYS_OF_HISTORY = 30
 MIN_BASELINE_FLOOR = 1.0  # avoids divide-by-zero for near-dormant accounts
 
-# Ratios are clipped to a sane range for the same reason budget_friction
-# already was: a near-dormant account (baseline pinned at MIN_BASELINE_FLOOR)
-# hitting one ordinary-sized withdrawal can otherwise produce a ratio in the
-# tens of thousands, which dominates training and prevents the model from
-# learning the typical-case pattern at all.
-# Ceilings picked from real Berka percentiles (checked directly, not
-# guessed): the unclipped 90th percentile of remaining_month_ratio is ~38
-# and the 99th is ~110, so an earlier, unverified ceiling of 30 was
-# clipping away the top ~10%+ of the real distribution — including the
-# model's entire p90 region, which is why the first trained model's
-# quantiles came out badly miscalibrated. 150 sits just above the 99th
-# percentile; only genuinely pathological cases (a near-dormant account,
-# baseline pinned at MIN_BASELINE_FLOOR, hit by one real transaction —
-# max observed was >37,000) get clipped now.
+# Clip ceilings come from real Berka percentiles (p90 ~38, p99 ~110) - 150 covers everything but the rare near-dormant account whose one transaction spikes the ratio (max seen was >37,000).
 ROLL_RATIO_CLIP_MAX = 15.0
 TARGET_RATIO_CLIP_MAX = 150.0
 
@@ -158,9 +117,7 @@ def build_daily_withdrawals(df):
 def engineer_features(account_daily):
     account_daily = account_daily.sort_values("date").reset_index(drop=True)
 
-    # Reindex onto every calendar day (0-spend where there's no transaction)
-    # so rolling windows reflect true elapsed time, not just "the last N
-    # transactions" regardless of gaps.
+    # Reindex onto every calendar day so rolling windows track real elapsed time, not just the last N transactions regardless of gaps.
     full_range = pd.date_range(account_daily["date"].min(), account_daily["date"].max(), freq="D")
     amounts = account_daily.set_index("date")["amount"].reindex(full_range, fill_value=0.0)
     df = pd.DataFrame({"date": full_range, "amount": amounts.values})
@@ -169,9 +126,7 @@ def engineer_features(account_daily):
     roll_7d_avg = df["amount"].shift(1).rolling(7, min_periods=1).mean()
     roll_14d_avg = df["amount"].shift(1).rolling(14, min_periods=1).mean()
     roll_14d_std = df["amount"].shift(1).rolling(14, min_periods=2).std().fillna(0)
-    # The baseline every ratio (including the target) is expressed against —
-    # see the FEATURE_COLUMNS comment above for why this must be a ratio,
-    # not an absolute amount.
+    # Baseline every ratio (including the target) is expressed against - see the FEATURE_COLUMNS note above.
     roll_90d_avg = df["amount"].shift(1).rolling(90, min_periods=14).mean().clip(lower=MIN_BASELINE_FLOOR)
 
     df["roll_3d_ratio"] = (roll_3d_avg / roll_90d_avg).clip(upper=ROLL_RATIO_CLIP_MAX)
@@ -188,9 +143,7 @@ def engineer_features(account_daily):
     df["is_month_end"] = ((days_in_month - day_of_month) < 3).astype(int)
     df["days_remaining_ratio"] = (days_in_month - day_of_month) / days_in_month
 
-    # Berka has no explicit budget concept, so each account's own trailing
-    # 90-day average spend (scaled to a month) stands in for "their typical
-    # monthly budget" — an approximation, not a real budget figure.
+    # Berka has no real budget concept, so each account's own trailing 90-day average spend (scaled to a month) stands in for one.
     approx_monthly_budget = (roll_90d_avg * 30).clip(lower=MIN_BASELINE_FLOOR)
     month_key = df["date"].dt.to_period("M")
     month_to_date = df.groupby(month_key)["amount"].cumsum().shift(1).fillna(0)

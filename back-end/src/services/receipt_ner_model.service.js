@@ -6,11 +6,7 @@ const crypto = require('crypto');
 // model (see model.service.js) — ai/models/ is gitignored except .gitkeep.
 const MODEL_PATH = path.join(__dirname, '..', '..', '..', 'ai', 'models', 'receipt_ner_model.tflite');
 
-// Same hash-of-bytes-as-version, cached against mtime, as model.service.js —
-// see that file's comment for the reasoning. Kept as a separate cache/module
-// rather than parameterizing model.service.js, since this model (153MB) has
-// a genuinely different delivery story client-side (streamed to disk, not
-// bundled as a Flutter asset) even though the server-side logic mirrors it.
+// Same hash-of-bytes-as-version approach as model.service.js, kept separate since this 153MB model streams to disk client-side instead of bundling as a Flutter asset.
 let cachedVersion = null;
 let cachedMtimeMs = null;
 
@@ -39,12 +35,7 @@ exports.getModelVersion = (req, res) => {
   }
 };
 
-// GET /api/ocr/model/file — streams the current .tflite (153MB, vs. Tier
-// B's 14KB) for the app to save to disk and load on-device. A plain
-// createReadStream().pipe() is already a constant-memory stream regardless
-// of file size, so no special handling is needed server-side for the size
-// difference — it's the *client's* download that needs to write straight to
-// disk instead of buffering the whole response in memory.
+// createReadStream().pipe() is constant-memory regardless of file size; it's the client that must write straight to disk, not buffer the response.
 exports.getModelFile = (req, res) => {
   if (!fs.existsSync(MODEL_PATH)) {
     return res.status(404).json({ message: 'No receipt NER model available yet' });

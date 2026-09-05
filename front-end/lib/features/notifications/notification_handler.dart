@@ -4,21 +4,7 @@ import 'package:flutter/material.dart';
 import '../../app.dart';
 import '../wishlist/presentation/screens/wishlist_screen.dart';
 
-/// Routes incoming FCM messages, in all three delivery states (FR3.5 +
-/// the location-nudge feature).
-///
-/// Sent by back-end/src/services/budget.service.js / nudge.service.js with a
-/// `notification` payload (title/body) and a `data` payload:
-/// `{ type: 'budget_alert', category, alertType, budgetId, alertId }` or
-/// `{ type: 'location_nudge', venueId, budgetId, alertId }`. Both types are
-/// "wishlist triggers" — alertId is the FK a created wishlist item attaches
-/// to (see wishlist.model.js/AddToWishlistDialog).
-///
-/// - Foreground: shown as a SnackBar with a "Delay it" action.
-/// - Background (app alive, tapped from the system tray): `onMessageOpenedApp`.
-/// - Terminated (app launched by the tap): `getInitialMessage()` at startup.
-/// Background/terminated messages are otherwise displayed automatically by
-/// the OS using the `notification` payload — no extra code needed for that.
+/// Routes incoming FCM `budget_alert`/`location_nudge` messages across foreground (SnackBar), background (`onMessageOpenedApp`), and terminated (`getInitialMessage`) states; both types are "wishlist triggers" whose alertId a created wishlist item attaches to.
 class NotificationHandler {
   static void init() {
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
@@ -34,10 +20,7 @@ class NotificationHandler {
         data['alertId'] != null;
   }
 
-  // Set on tap (background or terminated) and consumed by
-  // tryShowPendingWishlistDialog — a terminated-state tap can resolve
-  // before any screen exists to show a dialog on top of, so it waits here
-  // until MainShell.initState calls back in once the user is past login.
+  // A terminated-state tap can resolve before any screen exists, so it waits here until MainShell.initState calls back in.
   static Map<String, dynamic>? _pendingTapData;
 
   static void _handleNotificationTap(RemoteMessage message) {
@@ -46,9 +29,7 @@ class NotificationHandler {
     tryShowPendingWishlistDialog();
   }
 
-  /// Shows the dialog for a pending tap if one is stored and a navigable
-  /// context is currently available; otherwise leaves it pending. Safe to
-  /// call speculatively (e.g. every time MainShell mounts).
+  /// Shows the pending tap's dialog if a navigable context exists, otherwise leaves it pending; safe to call speculatively.
   static void tryShowPendingWishlistDialog() {
     final data = _pendingTapData;
     final context = MyApp.navigatorKey.currentContext;

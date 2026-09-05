@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 
-/// A small caps label sitting above a field, matching the design system's
-/// "EMAIL ADDRESS" / "TRANSACTION AMOUNT" look — used instead of Flutter's
-/// default floating InputDecoration label wherever that exact style matters.
+/// Small-caps label above a field, replacing Flutter's default floating InputDecoration label where that exact look matters.
 class LabeledField extends StatelessWidget {
   final String label;
   final Widget child;

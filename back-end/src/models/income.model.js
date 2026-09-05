@@ -9,9 +9,7 @@ exports.createIncome = ({ userId, amount, source, receivedDate }) => {
   return db.query(query, [userId, amount, source || null, receivedDate || null]);
 };
 
-// 6 months back (vs. 4 for expenses in forecast.model.js) since paychecks
-// are typically ~monthly — income_forecaster.js needs several occurrences
-// to compute meaningful interval statistics.
+// 6 months back (vs. 4 for expenses) since paychecks are ~monthly and the forecaster needs several occurrences for meaningful stats.
 exports.listIncomeForUser = (userId) => {
   const query = `
     SELECT income_id, amount, source, received_date
@@ -22,9 +20,7 @@ exports.listIncomeForUser = (userId) => {
   return db.query(query, [userId]);
 };
 
-// Real income received in [monthStart, monthEndExclusive) — used by the
-// dashboard's "Available to spend" figure (budget.service.js#listBudgets),
-// distinct from listIncomeForUser's rolling 6-month history view.
+// Feeds "Available to spend"; distinct from listIncomeForUser's rolling 6-month history view.
 exports.getTotalIncomeForMonth = (userId, monthStart, monthEndExclusive) => {
   const query = `
     SELECT COALESCE(SUM(amount), 0) AS total

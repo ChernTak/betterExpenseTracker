@@ -82,9 +82,7 @@ exports.update = async (req, res) => {
   const { id } = req.params;
   const { label, icon, color, keywords } = req.body;
 
-  // Only validate fields the caller actually tried to change — update() is
-  // partial (COALESCE in the query), so an omitted field must not be
-  // rejected just because it wasn't provided.
+  // Only validate fields actually provided; update() is a partial COALESCE so omitted fields shouldn't be rejected.
   if (label !== undefined && !label.trim()) {
     return res.status(400).json({ message: 'label is required' });
   }

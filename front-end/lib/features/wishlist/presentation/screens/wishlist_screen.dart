@@ -6,14 +6,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../services/category_service.dart';
 import '../../../../services/wishlist_service.dart';
 
-/// Wishlist: purchases the user has deliberately delayed. Browsing/resolving
-/// items lives here (reached from Settings). Most items arrive from a
-/// real-time spending alert (see AddToWishlistDialog's alertId param and its
-/// call sites in budgets_screen.dart / notification_handler.dart), but the
-/// "+" here lets a user pre-empt a temptation on their own — e.g. "I know
-/// I'll want this gaming chair, delay it now" — before any budget alert
-/// would ever fire for it. Same dialog either way; this path just omits
-/// alertId, which the backend already treats as optional.
+/// Wishlist: purchases the user has deliberately delayed. Most items arrive from a spending alert, but the "+" here lets a user pre-empt a temptation on their own, using the same dialog with alertId omitted.
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
 
@@ -69,10 +62,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
         item['wishlist_id'] as String,
         status: status,
       );
-      // 'purchased' creates a real expense (see resolvePurchase in the
-      // backend) — ping the expense-change bus so the Guide dashboard's
-      // "Available to spend" doesn't go stale, same pattern goals_screen.dart
-      // and income_history_screen.dart already use for this class of gap.
+      // 'purchased' creates a real expense, so ping the expense-change bus to keep the Guide dashboard from going stale.
       if (status == 'purchased') notifyExpenseDataChanged();
       _refresh();
     } catch (e) {
@@ -211,12 +201,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     );
                   }
 
-                  // On the Pending tab, items whose cooling-off delay has
-                  // already passed are surfaced first under their own
-                  // heading — this is the "reminder" for a delay that just
-                  // expired, since there's no push-notification scheduler
-                  // for it: the prompt is re-shown every time this screen
-                  // opens instead.
+                  // Expired-delay items surface first under their own heading — this reminder re-shows on every open since there's no push scheduler for it.
                   final today = DateTime.now();
                   final todayOnly = DateTime(today.year, today.month, today.day);
                   bool isExpired(Map<String, dynamic> item) {
@@ -302,9 +287,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
 class _WishlistTile extends StatelessWidget {
   final Map<String, dynamic> item;
-  // Whether this pending item's cooling-off delay has passed — gates
-  // whether "Mark as bought" is selectable at all, mirroring the backend's
-  // hard 409 block so a tap doesn't just round-trip into an error.
+  // Gates whether "Mark as bought" is selectable, mirroring the backend's hard 409 block so a tap can't round-trip into an error.
   final bool isExpired;
   final VoidCallback onMarkPurchased;
   final VoidCallback onDismiss;
@@ -464,9 +447,7 @@ class _WishlistTile extends StatelessWidget {
   }
 }
 
-/// Adds a purchase to delay. Opened either from a real-time alert
-/// (alertId + prefilled category/merchant) or manually. Public so it can be
-/// invoked from budgets_screen.dart's alert card and notification_handler.dart.
+/// Adds a purchase to delay, opened from a real-time alert or manually; public so budgets_screen.dart and notification_handler.dart can invoke it.
 class AddToWishlistDialog extends StatefulWidget {
   final String? alertId;
   final String? initialCategory;
@@ -641,10 +622,7 @@ class _ConvertToGoalResult {
   const _ConvertToGoalResult({required this.targetAmount, this.deadlineDate});
 }
 
-/// Confirms the target amount (and optional deadline) before a pending item
-/// resolves into a saving goal instead of being bought or dismissed. Target
-/// amount is pre-filled from estimated_cost when the item has one, but is
-/// still editable/required since older or manually-added items may not.
+/// Confirms target amount/deadline before converting a pending item to a saving goal; target pre-fills from estimated_cost but stays editable/required since older items may lack it.
 class _ConvertToGoalDialog extends StatefulWidget {
   final Map<String, dynamic> item;
 

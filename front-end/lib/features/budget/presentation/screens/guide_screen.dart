@@ -13,17 +13,7 @@ import '../../../expense/presentation/screens/expense_list_screen.dart';
 import '../../../income/presentation/screens/income_history_screen.dart';
 import '../../../wishlist/presentation/screens/wishlist_screen.dart';
 
-/// The "Guide" home tab: this month's spend-vs-budget ring, a real (not
-/// simulated) insight computed from this month's budgets, and a feed of the
-/// most recent expenses. Net worth and AI-generated tips from the mockup
-/// aren't backed by any endpoint yet, so this only shows real data.
-///
-/// Months are paged with a [PageView] (one page per month) rather than a
-/// single screen swapped on gesture-end, so dragging tracks the finger in
-/// real time and settles with the platform's own page-snap animation.
-/// Index [_currentPageIndex] is "now"; there's no upper bound on the page
-/// index, so browsing forward into future months is unrestricted. Tapping
-/// the month label instead jumps straight to any month via [_MonthYearPickerDialog].
+/// Guide home tab: spend-vs-budget ring, real insight, recent-expenses feed, paged by month via PageView (no upper bound going forward).
 class GuideScreen extends StatefulWidget {
   const GuideScreen({super.key});
 
@@ -68,9 +58,7 @@ class _GuideScreenState extends State<GuideScreen> {
       (month.year - _thisMonth.year) * 12 +
       (month.month - _thisMonth.month);
 
-  // Each _MonthPage owns its own fetch, keyed by (page, tick) — bumping the
-  // tick changes every currently-built page's key, forcing a fresh fetch
-  // when an expense/category changes elsewhere in the app.
+  // Each _MonthPage is keyed by (page, tick); bumping tick forces a fresh fetch when data changes elsewhere.
   void _refresh() => setState(() => _refreshTick++);
 
   void _goToPreviousMonth() {
@@ -156,9 +144,7 @@ const _monthNames = [
   'December',
 ];
 
-/// Lets the Guide screen browse any month's budget-vs-spend and activity,
-/// not just the current one — chevrons step by one, and tapping the label
-/// opens [_MonthYearPickerDialog] to jump straight to a specific month.
+/// Lets Guide browse any month — chevrons step by one, tapping the label opens [_MonthYearPickerDialog] to jump directly.
 class _MonthSelector extends StatelessWidget {
   final DateTime month;
   final VoidCallback onPrevious;
@@ -427,14 +413,7 @@ class _MonthPageState extends State<_MonthPage> {
           final availableToSpend =
               (dashboard['availableToSpend'] as num?)?.toDouble();
 
-          // Merged view for the "top category" insight only — categories
-          // with real spend but no budget row still show up here (as
-          // current_spend with no monthly_limit) so the insight isn't blind
-          // to unbudgeted spending. NOT used by the Monthly Budget card
-          // itself (that stays scoped to `budgets` so its %/remaining match
-          // totalLimit/totalSpent, which only cover budgeted categories) or
-          // by the "Category Budgets" management list below, which treats
-          // every entry as an editable row (budget_id, monthly_limit).
+          // Merged view for the top-category insight only, so unbudgeted spend isn't invisible — NOT used by the Monthly Budget card or the Category Budgets list below.
           final chartEntries = [
             ...budgets,
             ...unbudgetedSpend.map(
@@ -525,10 +504,7 @@ class _MonthlyBudgetCard extends StatelessWidget {
         : 0.0;
     final remaining = (totalLimit - totalSpent).clamp(0, double.infinity);
 
-    // One slice per category with spend, coloured to match that category's
-    // icon/progress-bar colour everywhere else in the app, sized by its
-    // share of totalSpent — plus a grey "remaining" slice so the ring still
-    // reads as spent-vs-limit at a glance, same as the old single-colour one.
+    // One slice per category (colour-matched, sized by share of totalSpent) plus a grey remaining slice so it still reads as spent-vs-limit.
     final slices = <_PieSlice>[
       for (final b in budgets)
         if (((b as Map<String, dynamic>)['current_spend'] as num).toDouble() >
@@ -653,10 +629,7 @@ class _MonthlyBudgetCard extends StatelessWidget {
   }
 }
 
-/// Ties the "pay yourself first" (Saving Goals) / "spend what's left"
-/// (Wishlist) framing to an actual number: income logged this month, minus
-/// what's already committed to goals, minus real total spend. Previously
-/// neither concept touched anything the user could see on the dashboard.
+/// Ties Saving Goals / Wishlist framing to an actual number: income minus goal commitments minus real spend.
 class _AvailableToSpendSection extends StatelessWidget {
   final double? availableToSpend;
   final double goalContributionsThisMonth;
@@ -748,9 +721,7 @@ class _PieSlice {
   const _PieSlice({required this.color, required this.value});
 }
 
-/// Draws each [_PieSlice] as a ring segment, clockwise from the top —
-/// a coloured-by-category alternative to the single-colour
-/// CircularProgressIndicator this replaces.
+/// Draws each [_PieSlice] as a ring segment, clockwise from top — replaces the old single-colour CircularProgressIndicator.
 class _PieChartPainter extends CustomPainter {
   final List<_PieSlice> slices;
   final double strokeWidth;

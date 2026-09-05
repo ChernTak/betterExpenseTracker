@@ -2,52 +2,20 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
-/// Byte-level BPE tokenizer for LayoutLMv3's RoBERTa tokenizer, ported from
-/// the standard GPT2/RoBERTa algorithm - the same one used by
-/// `ai/receipt_ner_gpu_training_v3.ipynb`'s `LayoutLMv3TokenizerFast`.
-///
-/// Every piece of this was verified against that real Python tokenizer
-/// before being ported, not assumed:
-/// - `tokenizer.json`'s config confirmed a plain `ByteLevel` pre-tokenizer
-///   (`add_prefix_space: true`) + `RobertaProcessing` post-processor
-///   (`<s>`/`</s>` wrapping) - the standard, unmodified scheme; fine-tuning
-///   only changes model weights, never the tokenizer vocabulary.
-/// - The byte-to-unicode table below is the exact 256-entry table from
-///   `transformers.models.roberta.tokenization_roberta.bytes_to_unicode()`.
-/// - The pre-tokenization regex below produced byte-for-byte identical
-///   splits to Python's `GPT2Tokenizer.pat` on test strings including
-///   currency amounts and contractions (`"RM20.80"` -> `[' RM','20','.','80']`
-///   in both).
-/// - Feeding a list of words (not raw text) confirmed EVERY word gets its
-///   own leading space prepended before encoding (`add_prefix_space`
-///   applies per-word for pre-split input), not just words after the
-///   first - verified directly: `['TOTAL', ':', 'RM20.80']` tokenized to
-///   `['<s>','ĠTOTAL','Ġ:','ĠRM','20','.','80','</s>']` with
-///   `word_ids = [None,0,1,2,2,2,2,None]`.
+/// Byte-level BPE tokenizer for LayoutLMv3's RoBERTa tokenizer; ported and verified byte-for-byte against the real Python `LayoutLMv3TokenizerFast` used in `ai/receipt_ner_gpu_training_v3.ipynb`.
 class BpeTokenizer {
   static const int clsTokenId = 0; // <s>
   static const int padTokenId = 1; // <pad>
   static const int sepTokenId = 2; // </s>
   static const int unkTokenId = 3; // <unk>
 
-  // GPT2/RoBERTa pre-tokenization regex - splits text into chunks (each
-  // starting with at most one leading space) before byte-level BPE is
-  // applied within each chunk independently. `unicode: true` enables the
-  // \p{L}/\p{N} Unicode property escapes this pattern needs - confirmed
-  // Dart's RegExp engine handles these identically to Python's `regex`
-  // library for this exact pattern (see class doc above).
+  // GPT2/RoBERTa pre-tokenization regex; splits into space-prefixed chunks before per-chunk BPE. Dart's RegExp matches Python's `regex` behavior here.
   static final RegExp _preTokenizeRegex = RegExp(
     r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+",
     unicode: true,
   );
 
-  // Byte value (0-255) -> Unicode codepoint. Maps printable ASCII/Latin-1
-  // bytes to themselves and remaps the "invisible"/control bytes (space,
-  // newline, etc.) to otherwise-unused codepoints starting at 256, so
-  // every possible byte has a distinct, visible, roundtrippable character
-  // to run BPE merges over. Exact values extracted from
-  // `transformers.models.roberta.tokenization_roberta.bytes_to_unicode()`,
-  // not reconstructed from a description of the algorithm.
+  // Byte value (0-255) -> Unicode codepoint, remapping control bytes to unused codepoints so every byte is a visible, roundtrippable char for BPE. Exact table from transformers' bytes_to_unicode().
   static const List<int> _byteToUnicode = [
     256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271,
     272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287,
@@ -73,11 +41,7 @@ class BpeTokenizer {
 
   BpeTokenizer._(this._vocab, this._bpeRanks);
 
-  /// Loads `vocab.json` (token -> id map) and `merges.txt` (ordered merge
-  /// rules, one "tokA tokB" pair per line, first line is a "#version: ..."
-  /// header to skip) from Flutter assets - the exact files LayoutLMv3's
-  /// tokenizer saved alongside the model
-  /// (`ai/saved_pytorch_model_v3/vocab.json` and `.../merges.txt`).
+  /// Loads `vocab.json` and `merges.txt` from assets (same files LayoutLMv3's tokenizer saved alongside the model), skipping the merges file's "#version" header line.
   static Future<BpeTokenizer> load({
     String vocabAsset = 'assets/models/receipt_ner_vocab.json',
     String mergesAsset = 'assets/models/receipt_ner_merges.txt',
@@ -97,11 +61,7 @@ class BpeTokenizer {
     return BpeTokenizer._(vocab, ranks);
   }
 
-  /// Applies byte-level BPE to one pre-tokenized chunk (already
-  /// regex-split, with its leading space if any) - encodes each UTF-8 byte
-  /// to its mapped character, then repeatedly merges the highest-priority
-  /// (lowest-rank) adjacent pair until no known merge applies, matching
-  /// the standard BPE algorithm exactly.
+  /// Applies byte-level BPE to one pre-tokenized chunk: maps bytes to chars, then repeatedly merges the lowest-rank adjacent pair until none apply.
   List<int> _bpeEncodeChunk(String chunk) {
     final cached = _encodeCache[chunk];
     if (cached != null) return cached;
@@ -135,9 +95,7 @@ class BpeTokenizer {
     return ids;
   }
 
-  /// Encodes one word with its own leading space prepended (confirmed
-  /// per-word `add_prefix_space` behavior - see class doc), returning its
-  /// subtoken vocab ids in order.
+  /// Encodes one word with its own leading space prepended (per-word `add_prefix_space` behavior), returning its subtoken vocab ids.
   List<int> encodeWord(String word) {
     final withLeadingSpace = ' $word';
     final ids = <int>[];
@@ -147,12 +105,7 @@ class BpeTokenizer {
     return ids;
   }
 
-  /// Encodes a list of already word-split text (e.g. from ML Kit) into
-  /// model-ready input_ids, wrapped with `<s>`/`</s>` (matching
-  /// `RobertaProcessing`), plus a parallel `wordIds` list (null for the
-  /// two special tokens) mirroring Python's `Encoding.word_ids()` - needed
-  /// downstream to map each subtoken back to its word's bounding box and,
-  /// for the first subtoken of a word, its predicted label.
+  /// Encodes word-split text into `<s>`/`</s>`-wrapped input_ids plus a parallel wordIds list (mirroring Python's `word_ids()`) used to map subtokens back to word boxes/labels.
   ({List<int> inputIds, List<int?> wordIds}) encodeWords(List<String> words) {
     final inputIds = <int>[clsTokenId];
     final wordIds = <int?>[null];

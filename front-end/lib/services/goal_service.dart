@@ -4,9 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for Saving Goals — a proactive, cumulative savings target
-/// the user sets up themselves (target amount, deadline, contributions over
-/// time), distinct from Wishlist which is reactive/nudge-triggered.
+/// Saving Goals: user-initiated cumulative savings target, distinct from Wishlist which is reactive/nudge-triggered.
 class GoalService {
   final _authService = AuthService();
 

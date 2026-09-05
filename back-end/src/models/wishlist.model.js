@@ -33,10 +33,7 @@ exports.markAlertActedUpon = (alertId) => {
   return db.query('UPDATE behavioral_alerts SET was_acted_upon = TRUE WHERE alert_id = $1', [alertId]);
 };
 
-// Joins in the requesting month's budget row for each item's category (if
-// any) so the frontend can show "this would push your Dining budget to X%"
-// without a second round-trip per item — same category+month/year lookup as
-// budget.model.js#getBudgetByCategoryMonth, just applied row-wise via JOIN.
+// Joins in this month's budget row per item's category so the frontend can show "this would push your budget to X%" without a second round-trip per item.
 exports.listWishlistForUser = (userId, status) => {
   const baseSelect = `
     SELECT w.*, b.monthly_limit AS budget_monthly_limit, b.current_spend AS budget_current_spend
@@ -93,11 +90,7 @@ exports.deleteWishlistItem = (wishlistId, userId) => {
   return db.query('DELETE FROM wishlist WHERE wishlist_id = $1 AND user_id = $2', [wishlistId, userId]);
 };
 
-// Resolves a pending item by starting a funded goal for it instead of
-// buying now or giving up on it — for planned purchases (e.g. "gaming
-// chair") rather than nudge-triggered impulse suppression. Goal creation
-// and the wishlist status flip happen in one transaction so a failure never
-// leaves an orphaned goal or a wishlist item silently pointing nowhere.
+// Goal creation and the wishlist status flip happen in one transaction so a failure never leaves an orphaned goal or a dangling wishlist item.
 exports.convertToGoal = async (wishlistId, userId, { targetAmount, deadlineDate, priority } = {}) => {
   const client = await db.connect();
   try {
@@ -149,11 +142,7 @@ exports.convertToGoal = async (wishlistId, userId, { targetAmount, deadlineDate,
   }
 };
 
-// Resolves a pending item as bought by creating the matching expenses row
-// in the same transaction, so the purchase actually lands in the user's
-// spending/budget totals instead of just flipping a status flag. Requires
-// estimated_cost and category since expenses.category is NOT NULL — the
-// service layer checks both before calling this.
+// Creates the matching expenses row in the same transaction so the purchase lands in spending/budget totals instead of just flipping a status flag; requires estimated_cost and category since expenses.category is NOT NULL.
 exports.resolvePurchase = async (wishlistId, userId, { purchasedOn, notes } = {}) => {
   const client = await db.connect();
   try {

@@ -4,14 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// A row from GET /api/admin/users. password_hash is never returned by the
-/// backend (see back-end/src/models/user.model.js findAllForAdmin).
-///
-/// mobile_number is masked in the list response (PDPA data-minimization —
-/// see findAllForAdmin) — only GET /api/admin/users/:id returns it in full,
-/// which is why this same class is reused for both endpoints rather than
-/// having a separate "detail" type: the shape is identical, only how much
-/// of mobile_number is visible differs server-side.
+/// A row from GET /api/admin/users; mobile_number is masked here but full on the :id detail endpoint, hence one shared class for both.
 class AdminUser {
   final String userId;
   final String email;
@@ -99,9 +92,7 @@ class AdminAuditEntry {
   }
 }
 
-/// Service layer for FR1.7 (admin account management: view/deactivate/delete).
-/// Every call requires a JWT for an account with role='admin' — the backend
-/// enforces this via admin.middleware.js regardless of what the client sends.
+/// Admin account management (FR1.7); backend enforces role='admin' via admin.middleware.js regardless of client.
 class AdminService {
   final _authService = AuthService();
 
@@ -160,10 +151,7 @@ class AdminService {
     }
   }
 
-  /// DELETE /api/admin/users/:id — soft: requests deletion (deactivates,
-  /// starts the grace-period clock). Permanent removal only happens via
-  /// [purgeUser] once that period elapses (PDPA erasure with a
-  /// recoverability window, FR1.7).
+  /// DELETE /api/admin/users/:id — soft: deactivates and starts the grace-period clock; [purgeUser] does the actual erasure later.
   Future<void> deleteUser(String userId) async {
     final response = await http.delete(Uri.parse(ApiEndpoints.adminDeleteUser(userId)), headers: await _authHeaders());
     if (response.statusCode != 200) {
@@ -172,9 +160,7 @@ class AdminService {
     }
   }
 
-  /// DELETE /api/admin/users/:id/purge — permanent. Rejected with a 400
-  /// (surfaced as an Exception here) until the grace period has elapsed,
-  /// unless [force] is set.
+  /// DELETE /api/admin/users/:id/purge — permanent; rejected with a 400 until the grace period elapses, unless [force] is set.
   Future<void> purgeUser(String userId, {bool force = false}) async {
     final response = await http.delete(
       Uri.parse(ApiEndpoints.adminPurgeUser(userId, force: force)),
@@ -186,9 +172,7 @@ class AdminService {
     }
   }
 
-  /// GET /api/admin/users/:id/export — a DSAR export of everything the app
-  /// holds on this user. Returned as pretty-printed JSON text for display;
-  /// the caller doesn't need it as a parsed object.
+  /// GET /api/admin/users/:id/export — DSAR export, returned as pretty-printed JSON text for display.
   Future<String> exportUser(String userId) async {
     final response = await http.get(Uri.parse(ApiEndpoints.adminExportUser(userId)), headers: await _authHeaders());
     if (response.statusCode != 200) {
@@ -222,9 +206,7 @@ class AdminService {
     return (body['auditLog'] as List<dynamic>).map((e) => AdminAuditEntry.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  /// DELETE /api/admin/recommendation-logs/purge — retention purge of raw
-  /// GPS coordinates stored by the food-recommendation feature. Returns the
-  /// number of rows deleted.
+  /// DELETE /api/admin/recommendation-logs/purge — retention purge of raw GPS coordinates from the food-recommendation feature.
   Future<int> purgeRecommendationLogs(int olderThanDays) async {
     final response = await http.delete(
       Uri.parse(ApiEndpoints.adminPurgeRecommendationLogs(olderThanDays)),
@@ -237,10 +219,7 @@ class AdminService {
     return body['deletedCount'] as int;
   }
 
-  /// DELETE /api/admin/guests/purge — PDPA storage-limitation cleanup for
-  /// "Continue as Guest" accounts abandoned past the given inactivity
-  /// threshold (see user.model.js purgeStaleGuests for how "inactive" is
-  /// computed). Returns the number of accounts deleted.
+  /// DELETE /api/admin/guests/purge — cleanup of "Continue as Guest" accounts inactive past the given threshold.
   Future<int> purgeStaleGuests(int olderThanDays) async {
     final response = await http.delete(
       Uri.parse(ApiEndpoints.adminPurgeStaleGuests(olderThanDays)),

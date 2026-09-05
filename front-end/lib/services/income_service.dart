@@ -4,13 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for Tier C (income logging + payday prediction).
-///
-/// Logs individual income events (paydays, freelance payments, etc.) —
-/// manual entry, since this app has no bank integration to auto-detect
-/// income from. The prediction itself (back-end/src/ml/income_forecaster.js)
-/// is computed server-side and returned as part of GET /api/insights/forecast's
-/// `expectedIncome` field, not fetched separately here.
+/// Tier C: logs manual income events (no bank integration); payday prediction is server-side via GET /api/insights/forecast's `expectedIncome`, not fetched here.
 class IncomeService {
   final _authService = AuthService();
 

@@ -1,8 +1,6 @@
 import 'receipt_ner_input_builder.dart';
 
-/// One field this model predicts — empty string means "not found", which is
-/// exactly the signal the caller (see plan Stage 6) uses to fall back to the
-/// backend regex parser's value instead.
+/// One field this model predicts — empty string signals "not found" so the caller falls back to the backend regex parser.
 class ReceiptNerFields {
   final String company;
   final String date;
@@ -24,18 +22,7 @@ class ReceiptSpan {
   const ReceiptSpan(this.text, this.box);
 }
 
-/// Turns per-token model logits into field text. A direct port of
-/// `predict_word_tags`/`extract_spans`/`group_fields` from
-/// `ai/receipt_ner_model_test.ipynb` Cell 19 — this is the logic that took
-/// TOTAL's correct rate from 17% to 91% in testing (the largest-box
-/// tie-break, not just taking the first candidate), so it must stay in
-/// lockstep with the Python original, not be "simplified" during the port.
-///
-/// Deliberately has no dependency on [Interpreter] or any model-loading
-/// concern (see `receipt_ner_service.dart`) — pure input-in/text-out, so
-/// this port's correctness can be verified directly against Python without
-/// needing a device to run the actual TFLite model on (`tflite_flutter` has
-/// no desktop binary; real inference can only be exercised on-device).
+/// Turns per-token model logits into field text. Direct port of `predict_word_tags`/`extract_spans`/`group_fields` from `ai/receipt_ner_model_test.ipynb` Cell 19 (the largest-box tie-break took TOTAL's accuracy from 17% to 91%, so keep in lockstep with the Python original). Deliberately has no [Interpreter]/model-loading dependency so it's testable against Python without on-device TFLite inference.
 class ReceiptFieldExtractor {
   // Must exactly match `ai/receipt_parser_v3_labels.json`'s `labels` array
   // (index == the model's output class index).
@@ -52,19 +39,10 @@ class ReceiptFieldExtractor {
   ];
   static const List<String> fields = ['COMPANY', 'DATE', 'ADDRESS', 'TOTAL'];
 
-  // Fields where a receipt can have multiple candidate spans (e.g. several
-  // number-looking words tagged TOTAL) and the *largest* bounding box wins —
-  // confirmed via `ai/receipt_ner_model_test.ipynb` Cell 19's `group_fields`
-  // as the fix that took TOTAL's correct-match rate from 17% to 91%/39% (vs.
-  // just taking the first match, which usually grabs a subtotal/tax line
-  // above the real total). COMPANY/ADDRESS use the first span instead.
+  // For these fields, multiple candidate spans can occur, so the largest bounding box wins (took TOTAL's accuracy from 17% to 91% vs. just taking the first match). COMPANY/ADDRESS use the first span instead.
   static const Set<String> largestBoxFields = {'TOTAL', 'DATE'};
 
-  /// Ports `predict_word_tags`: for each word, use its *first* subtoken's
-  /// predicted label (matching how `word_ids()` + `seen_words` dedupe
-  /// subtokens in the Python original); words truncated out of
-  /// [ReceiptNerInput.tokenWordIds] entirely are left at the "O" default,
-  /// same as Python's pre-filled `word_tags = ["O"] * len(words)`.
+  /// Ports `predict_word_tags`: uses each word's *first* subtoken's predicted label; words truncated out of [ReceiptNerInput.tokenWordIds] stay at the "O" default, matching the Python original.
   static List<String> predictWordTags(ReceiptNerInput input, List<List<double>> logits) {
     final wordTags = List<String>.filled(input.words.length, 'O');
     final seenWords = <int>{};
@@ -84,11 +62,7 @@ class ReceiptFieldExtractor {
     return bestIndex;
   }
 
-  /// Ports `group_fields`/`extract_spans` exactly, including its tie-break:
-  /// for [largestBoxFields], picks the *first* span with the
-  /// strictly-largest area (Python's `max(list, key=...)` semantics — a
-  /// naive `List.sort` would not reproduce this, since Dart's sort isn't
-  /// guaranteed stable and could pick a different span among ties).
+  /// Ports `group_fields`/`extract_spans`: for [largestBoxFields], picks the first strictly-largest-area span (Python's `max(key=...)` semantics — a plain `List.sort` isn't guaranteed stable and could pick differently among ties).
   static ReceiptNerFields groupFields(List<ReceiptNerWord> words, List<String> wordTags) {
     final result = <String, String>{};
     for (final field in fields) {

@@ -1,10 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-/// Local cache of merchant text -> category, so a merchant that's already
-/// been categorized once (e.g. the same "STARBUCKS #4821 KL" appearing on
-/// every receipt) resolves instantly and offline instead of round-tripping
-/// to the backend classifier every time.
+/// Local cache of merchant text -> category so a repeat merchant resolves instantly offline instead of hitting the backend classifier again.
 class VendorCacheDao {
   static const _dbName = 'vendor_cache.db';
   static const _table = 'vendor_cache';
@@ -34,9 +31,7 @@ class VendorCacheDao {
     );
   }
 
-  /// Lowercases, strips punctuation and drops a trailing numeric store code
-  /// (e.g. "Starbucks #4821" -> "starbucks") so slightly different
-  /// receipt/voice renderings of the same merchant hit the same cache row.
+  /// Normalizes merchant text (e.g. "Starbucks #4821" -> "starbucks") so different renderings hit the same cache row.
   static String normalize(String text) {
     var normalized = text.toLowerCase().trim();
     normalized = normalized.replaceAll(RegExp(r'[^\w\s]'), ' ');
@@ -82,9 +77,7 @@ class VendorCacheDao {
     );
   }
 
-  /// Overwrites whatever is cached for this merchant with a user-confirmed
-  /// category at full confidence, so the same merchant is categorized
-  /// correctly from now on without waiting on the backend.
+  /// Overwrites the cached category with a user-confirmed one at full confidence.
   Future<void> overrideCategory(String text, String newCategory) async {
     await upsert(text, newCategory, 1.0, 'user_correction');
   }

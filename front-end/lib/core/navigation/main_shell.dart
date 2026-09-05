@@ -16,14 +16,7 @@ import '../../services/category_service.dart';
 import '../../services/feature_flag_service.dart';
 import '../constants/app_colors.dart';
 
-/// The post-login app shell: a single Scaffold hosting the five bottom-nav
-/// tabs (Guide/Budget/Input/Food/Settings), each kept alive in an
-/// IndexedStack so switching tabs doesn't refetch or lose scroll state.
-/// Input sits in a raised circular button docked in a notch of the bottom
-/// bar, matching a common banking-app layout (tab order/labels per the
-/// 2026-08-12 request — Food is a placeholder/first-pass and expected to be
-/// refined later; Insights was folded into the Budget tab as a "Forecast"
-/// sub-tab on 2026-08-18, freeing this slot for account Settings).
+/// Post-login shell: five bottom-nav tabs kept alive in an IndexedStack; Food is a placeholder, Insights was folded into Budget's Forecast sub-tab.
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -40,10 +33,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   int _index = _guideIndex;
 
-  // Measured post-frame from _bottomBarKey so the body's keyboard padding
-  // (below) can subtract it back out — the body's Scaffold-allocated area
-  // already stops above this bar regardless of keyboard, so compensating by
-  // the *full* keyboard height double-counts it and leaves a blank gap.
+  // Measured post-frame so body padding can subtract the bar height back out — using the full keyboard height double-counts it.
   final _bottomBarKey = GlobalKey();
   double _bottomBarHeight = 0;
 
@@ -64,47 +54,30 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     'Settings',
   ];
 
-  // FR4.4 — hands-free wake-word ("Ok App") voice expense logging. Kept
-  // opt-in (not started automatically) since it means a persistent
-  // foreground mic listener; the toggle's chosen state is remembered across
-  // app restarts the same way GPS consent is (see AuthService.updateLocationConsent).
+  // FR4.4 hands-free wake-word logging; opt-in since it's a persistent mic listener, state persisted like GPS consent.
   static const _handsFreePrefsKey = 'voice_hands_free_enabled';
   static const _batteryTipShownKey = 'voice_battery_tip_shown';
   late final VoiceCaptureController _voiceController;
   final _featureFlagService = FeatureFlagService();
 
-  // Remote kill-switch (GET /api/config/feature-flags) — checked once at
-  // startup so a bad hands-free rollout can be disabled server-side without
-  // an app update. Defaults true (fails open): this feature is designed to
-  // work with zero connectivity ever, so a flag check must never gate it
-  // shut just because the network call itself failed.
+  // Remote kill-switch, checked at startup; defaults true (fails open) since this feature must work offline, so a failed flag check can't gate it shut.
   bool _voiceFeatureAllowed = true;
 
-  // Set right before we stop the listener ourselves on backgrounding (see
-  // didChangeAppLifecycleState) so the next resumed callback knows to
-  // silently restart it, rather than showing the "stopped by system"
-  // recovery snackbar meant for an OEM battery manager killing it
-  // out-of-band.
+  // Set before we stop the listener ourselves on backgrounding, so resume restarts it silently instead of showing the OEM-battery-kill recovery snackbar.
   bool _handsFreeSuspendedForBackground = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Warm CategoryService's static cache before any tab first renders, so
-    // the very first icon/color/label lookup doesn't fall back to a generic
-    // placeholder while the network request is still in flight.
+    // Warm CategoryService's cache before first render so early icon/color/label lookups don't fall back to a placeholder.
     CategoryService().fetchCategories();
 
     _voiceController = VoiceCaptureController();
     _voiceController.addListener(_onVoiceStateChanged);
     _restoreHandsFreePreference();
 
-    // Picks up a wishlist-nudge notification tapped while the app was
-    // terminated (see NotificationHandler) — that tap can resolve before
-    // this shell (the first screen with a usable BuildContext post-login)
-    // ever mounts, so it's stashed until now instead of being handled
-    // where it was received.
+    // Handles a wishlist-nudge notification tap from before this shell (first post-login BuildContext) mounted — stashed until now.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationHandler.tryShowPendingWishlistDialog();
     });
@@ -124,14 +97,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
   }
 
-  // Confirmed on a physical device: vosk_flutter_2's native recognizer
-  // thread keeps feeding microphone audio into libvosk.so right through the
-  // Activity detaching, and races the teardown into a process-killing
-  // SIGSEGV inside AcceptWaveform. Explicitly stopping the listener on
-  // backgrounding — before the OS/Activity teardown can race it — avoids
-  // that crash entirely; _handsFreeSuspendedForBackground marks that this
-  // was *our* stop, so resuming restarts it silently instead of routing
-  // through the OEM-battery-manager recovery snackbar below.
+  // vosk_flutter_2's native thread races Activity teardown into a SIGSEGV; stopping the listener explicitly on backgrounding avoids the crash.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -257,13 +223,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     await _maybeOfferBatteryOptimizationTip(prefs);
   }
 
-  // Shown once, the first time hands-free is turned on — MIUI/ColorOS/
-  // Samsung-style battery managers are the single most common reason this
-  // feature "randomly stops working" in the wild, and there's no way to fix
-  // that from inside the app beyond pointing the user at the right settings
-  // screen. openAppSettings() can't deep-link the exact battery-optimization
-  // sub-screen (that's OEM-specific and not something permission_handler
-  // exposes), so this points at the app's general settings page instead.
+  // Shown once on first enable — OEM battery managers are the top reason this silently stops working; openAppSettings() can't deep-link the exact sub-screen, so this opens general settings.
   Future<void> _maybeOfferBatteryOptimizationTip(
     SharedPreferences prefs,
   ) async {
@@ -318,21 +278,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           double.infinity,
         );
     return Scaffold(
-      // False so the bottom nav bar and the FAB docked in its notch stay
-      // pinned to the screen bottom instead of riding up with the keyboard
-      // (the default `true` resizes the whole Scaffold, including those,
-      // whenever a text field on a tab like Add Expense gets focus). The
-      // body's own Padding below still shifts scrollable content clear of
-      // the keyboard, so fields remain reachable.
+      // False so the bottom nav/FAB stay pinned instead of riding up with the keyboard; body Padding below still clears fields.
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(_titles[_index]),
         actions: [
-          // Hands-free wake-word listening (WakeWordService/vosk_flutter_2)
-          // is Android-only (see its doc comment) — the toggle isn't shown
-          // where it could only ever fail; iOS still has the Voice
-          // tap-to-talk button on the Input screen. Also hidden if the
-          // backend's remote kill-switch has disabled it (_voiceFeatureAllowed).
+          // Hands-free listening is Android-only, so the toggle is hidden elsewhere (iOS keeps the tap-to-talk button); also hidden if the kill-switch disabled it.
           if (Platform.isAndroid && _voiceFeatureAllowed)
             IconButton(
               onPressed: _toggleHandsFree,
@@ -366,11 +317,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         tooltip: 'Input',
         child: const Icon(Icons.add, color: Colors.white, size: 32),
       ),
-      // SafeArea keeps the bar clear of the gesture-nav inset on devices
-      // like the Pixel. No explicit `height` on BottomAppBar — guessing
-      // fixed pixel budgets against it produced worse overflows each time
-      // (7px unset -> 11px @72 -> 19px @64, tested on-device); _NavBarItem
-      // instead scales its own content to fit whatever height it's given.
+      // No explicit height on BottomAppBar — fixed pixel budgets produced worse overflows on-device; _NavBarItem scales to fit instead.
       bottomNavigationBar: SafeArea(
         key: _bottomBarKey,
         top: false,
@@ -442,10 +389,7 @@ class _NavBarItem extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          // Scales down instead of overflowing if BottomAppBar ever resolves
-          // a tighter height than this content wants (device/theme/text-scale
-          // dependent — see the build() comment for why fixed pixel heights
-          // didn't reliably work here).
+          // Scales down instead of overflowing if BottomAppBar resolves a tighter height than wanted (see build() for why fixed heights don't work).
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Column(

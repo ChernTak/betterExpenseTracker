@@ -9,10 +9,7 @@ function currentMonthYear() {
   return { month: now.getUTCMonth() + 1, year: now.getUTCFullYear() };
 }
 
-// GET /api/insights/forecast — end-of-month spend projection, fixed-bill
-// breakdown and daily safe-to-spend, computed on demand from this user's
-// expense history and current-month budgets (see forecaster.js for the
-// Tier A/B model).
+// GET /api/insights/forecast — end-of-month projection computed on demand (see forecaster.js for the Tier A/B model).
 exports.getForecast = async (req, res) => {
   try {
     const { month, year } = currentMonthYear();
@@ -33,9 +30,7 @@ exports.getForecast = async (req, res) => {
     // the plan's scope note): does not feed into dailySafeToSpend above.
     const expectedIncome = incomeForecaster.buildIncomeForecast(incomeResult.rows);
 
-    // Tier B's trained-model prediction runs on-device (see
-    // front-end/lib/services/tier_b_inference_service.dart) and overrides
-    // this heuristic projection client-side when it succeeds.
+    // Tier B's trained-model prediction runs on-device and overrides this heuristic projection when it succeeds.
     return res.status(200).json({ month, year, ...forecast, expectedIncome });
   } catch (err) {
     console.error('Get forecast error', err);
@@ -43,9 +38,7 @@ exports.getForecast = async (req, res) => {
   }
 };
 
-// POST /api/insights/predictions — logs an on-device Tier B prediction for
-// later accuracy evaluation (ai/evaluate_tier_b.py). Fire-and-forget from
-// the app's perspective; failures here shouldn't affect what the user sees.
+// POST /api/insights/predictions — logs an on-device Tier B prediction for later accuracy evaluation; failures here are non-fatal.
 exports.logPrediction = async (req, res) => {
   const { month, year, p10, p50, p90, modelVersion } = req.body;
 

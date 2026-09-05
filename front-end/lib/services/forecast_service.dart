@@ -4,11 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for the end-of-month spend forecast (Insights tab).
-///
-/// Fetches the on-demand prediction the backend computes from expense
-/// history and this month's budgets: projected month-end total, fixed bills
-/// still due, and today's "safe-to-spend" allowance.
+/// Fetches the end-of-month spend forecast (Insights tab): projected total, fixed bills due, and today's safe-to-spend allowance.
 class ForecastService {
   final _authService = AuthService();
 
@@ -40,9 +36,7 @@ class ForecastService {
     }
   }
 
-  /// POST /api/insights/predictions — logs an on-device Tier B prediction
-  /// for later accuracy evaluation (ai/evaluate_tier_b.py). Fire-and-forget:
-  /// failures here shouldn't surface to the user or block the Insights tab.
+  /// Logs an on-device Tier B prediction for later accuracy evaluation; fire-and-forget, failures shouldn't surface to the user.
   Future<void> logPrediction({
     required int month,
     required int year,

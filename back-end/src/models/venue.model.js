@@ -29,11 +29,7 @@ exports.upsertVenue = ({ provider, providerPlaceId, name, address, lat, lng, pri
   ]);
 };
 
-// Narrow upsert used by the search-list photo enrichment pass (recommendation.
-// service.js#getFoodRecommendations), which only ever knows name/lat/lng for
-// a venue — unlike upsertVenue above, this only ever touches photo_reference,
-// so it can't blank out address/tel/website/hours a prior detail-view lookup
-// may have already cached for the same venue.
+// Only touches photo_reference (unlike upsertVenue), so it can't blank out address/tel/website/hours a prior detail lookup already cached.
 exports.upsertPhotoReference = ({ provider, providerPlaceId, name, lat, lng, photoReference, photoApi }) => {
   const query = `
     INSERT INTO venue_cache (provider, provider_place_id, name, lat, lng, photo_reference, photo_api, cached_at)
@@ -46,12 +42,7 @@ exports.upsertPhotoReference = ({ provider, providerPlaceId, name, lat, lng, pho
   return db.query(query, [provider, providerPlaceId, name, lat ?? null, lng ?? null, photoReference ?? null, photoApi ?? null]);
 };
 
-// venue_cache has no automatic expiry — a venue looked up once and never
-// again just sits here forever past VENUE_CACHE_TTL_DAYS, unlike
-// actively-viewed venues which self-refresh via upsertVenue/
-// upsertPhotoReference above. Admin-triggered since this app has no job
-// scheduler to run it automatically (same pattern as
-// recommendation.model.js#purgeOlderThan).
+// venue_cache has no automatic expiry, so a venue looked up once just sits here forever; admin-triggered since there's no job scheduler.
 exports.purgeStale = (days) => {
   const query = `
     DELETE FROM venue_cache

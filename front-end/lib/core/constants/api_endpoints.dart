@@ -1,12 +1,5 @@
 class ApiEndpoints {
-  // Testing on a physical Android phone over Wi-Fi, so we use the PC's LAN
-  // IP address instead of the emulator-only alias 10.0.2.2. The phone and
-  // PC must be on the same Wi-Fi network, and Windows Firewall must allow
-  // inbound connections on this port.
-  //
-  // The IP is passed in at build/run time via --dart-define=API_BASE_URL=...
-  // (see front-end/dart_defines.example.json) instead of being hardcoded, since
-  // it changes whenever the PC reconnects to Wi-Fi or gets a new DHCP lease.
+  // LAN IP for testing on a physical device over Wi-Fi; passed via --dart-define=API_BASE_URL since it changes with DHCP leases.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://10.210.115.94:3000',
@@ -115,11 +108,7 @@ class ApiEndpoints {
   ) =>
       '$recommendations/food/venues/$provider/${Uri.encodeComponent(providerPlaceId)}';
 
-  // venue['photoUrl'] from the recommendations/detail response is already a
-  // path relative to the server root (e.g. '/api/recommendations/food/photo/...')
-  // — the backend doesn't reliably know its own externally-reachable host
-  // given this project's LAN-IP/adb-reverse setup, so it returns a path and
-  // this just prefixes the baseUrl the client already knows.
+  // Backend returns a path (not full URL) since it can't reliably know its own externally-reachable host; prefix baseUrl here.
   static String recommendationVenuePhoto(String photoPath) =>
       '$baseUrl$photoPath';
 

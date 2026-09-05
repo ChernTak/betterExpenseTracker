@@ -10,29 +10,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// On-device Tier B (variable/discretionary spend) inference — see
-/// ai/train_tier_b.py and predictive_budgeting_engine_summary.md. Runs the
-/// TFLite model locally instead of calling a server for inference; Tier A
-/// (recurring bills) and the rest of the forecast still come from
-/// GET /api/insights/forecast (back-end/src/ml/forecaster.js).
-///
-/// The model predicts the WHOLE remaining month's spend directly (not a
-/// single day, summed via a loop) — see prepare_tier_b_data.py's
-/// TARGET_COLUMN comment — so this only needs one feature computation and
-/// one interpreter call per prediction, "as of" today (i.e. using history
-/// strictly BEFORE today, matching how training features were built with
-/// shift(1); today's own actual spend is added back in by the caller,
-/// ai_insights_screen.dart, via variableSpentSoFar).
-///
-/// The fixed/variable expense split below mirrors
-/// back-end/src/ml/forecaster.js#detectRecurringGroups (kept in sync
-/// manually — update both if the thresholds ever change).
-///
-/// Model delivery is OTA: the bundled asset (assets/models/tier_b_regressor.tflite)
-/// is only the offline default. On load, this checks the backend
-/// (GET /api/insights/model/version) for a newer trained model (throttled
-/// to once/day) and downloads it to the app's documents directory if so —
-/// see insight.routes.js for the server side.
+/// On-device Tier B (variable spend) inference via TFLite; Tier A and the rest of the forecast still come from GET /api/insights/forecast. Predicts the whole remaining month directly (one interpreter call, "as of" today using history strictly before today). Fixed/variable split mirrors back-end/src/ml/forecaster.js#detectRecurringGroups (keep both in sync). Model is OTA: checks GET /api/insights/model/version once/day and downloads a newer one over the bundled asset default.
 class TierBInferenceService {
   static Interpreter? _interpreter;
 
@@ -43,12 +21,7 @@ class TierBInferenceService {
   static const _baselineWindowDays = 90;
   static const _baselineFloor = 1.0;
 
-  // Must match ROLL_RATIO_CLIP_MAX/TARGET_RATIO_CLIP_MAX in
-  // ai/prepare_tier_b_data.py / ai/train_tier_b.py — the model was trained
-  // on ratios clipped to these ranges, so inputs/outputs outside them would
-  // be out-of-distribution for it. Picked from real Berka percentiles, not
-  // guessed — an earlier, unverified ceiling of 30 clipped away the top
-  // ~10%+ of the real distribution.
+  // Must match ROLL_RATIO_CLIP_MAX/TARGET_RATIO_CLIP_MAX in ai/prepare_tier_b_data.py / train_tier_b.py or inputs go out-of-distribution; values from real Berka percentiles (an earlier guess of 30 clipped the top ~10%+).
   static const _rollRatioClipMax = 15.0;
   static const _targetRatioClipMax = 150.0;
 
@@ -58,10 +31,7 @@ class TierBInferenceService {
   static const _lastCheckedPrefsKey = 'tier_b_model_last_checked';
   static const _updateCheckInterval = Duration(days: 1);
 
-  // Malaysian FIXED-DATE public holidays only (no lunar/Islamic movable
-  // dates, e.g. Hari Raya, Chinese New Year, Deepavali — those would need a
-  // yearly-updated calendar this app doesn't have). This is a deliberately
-  // scoped-down stand-in feature, same spirit as days_since_payday.
+  // Fixed-date Malaysian holidays only; movable lunar/Islamic dates would need a yearly-updated calendar this app doesn't have.
   static const _malaysiaFixedHolidays = [
     [1, 1], // New Year's Day
     [5, 1], // Labour Day
@@ -138,19 +108,13 @@ class TierBInferenceService {
     return _interpreter = await Interpreter.fromAsset(_bundledModelAsset);
   }
 
-  /// The version string of whichever model actually produced the last
-  /// prediction — the server's content hash if a downloaded copy is in use,
-  /// or 'bundled' if still on the offline default asset. For logging only
-  /// (ai/evaluate_tier_b.py), not used to decide anything at inference time.
+  /// Version of the model that produced the last prediction, for logging only (ai/evaluate_tier_b.py) — not used at inference time.
   Future<String> currentModelVersion() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_versionPrefsKey) ?? 'bundled';
   }
 
-  /// Returns a predicted amount for the remaining month's variable spend
-  /// (today exclusive, through month-end) — or null if there's too little
-  /// history, no budget set, or the model fails to load, so the caller
-  /// should keep the server's heuristic instead.
+  /// Returns null (caller should fall back to the server heuristic) if there's too little history, no budget, or the model fails to load.
   Future<double?> predictRemainingMonthSpend({
     required List<dynamic> expenses,
     required double totalBudget,
@@ -247,9 +211,7 @@ class TierBInferenceService {
     final output = List.generate(1, (_) => List.filled(1, 0.0));
     interpreter.run(input, output);
 
-    // The model was trained on log1p(remaining_month_ratio) (see
-    // train_tier_b.py's main()) — undo that with expm1 before treating the
-    // output as a ratio.
+    // Model was trained on log1p(remaining_month_ratio); undo with expm1 before using as a ratio.
     final predictedRatio = (math.exp(output[0][0]) - 1).clamp(
       0.0,
       _targetRatioClipMax,
@@ -347,9 +309,7 @@ class TierBInferenceService {
     return totals;
   }
 
-  /// Averages (or sums, if [sumInstead]) every day in [from, toExclusive) —
-  /// days absent from [series] count as 0 spend, matching the calendar-day
-  /// 0-fill used when building the training data (prepare_tier_b_data.py).
+  /// Days absent from [series] count as 0 spend, matching the training data's calendar-day 0-fill (prepare_tier_b_data.py).
   double _averageBetween(
     Map<DateTime, double> series, {
     required DateTime from,

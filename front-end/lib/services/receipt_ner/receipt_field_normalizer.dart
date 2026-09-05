@@ -1,32 +1,18 @@
-/// Turns the model's raw span text (e.g. `"RM20.80"`, `"12/03/2024"`) into
-/// the typed values the form fields need. Mirrors
-/// `back-end/src/services/ocr.service.js`'s `extractAmount`/`extractDate`
-/// conventions deliberately, not by coincidence — v3 and the backend regex
-/// parser are meant to agree on the same receipt when both find a value
-/// (see plan Stage 6), so they need the same day/month-first assumption
-/// (Malaysian receipts print DD/MM/YYYY) and the same "strip everything but
-/// digits and the decimal point" amount cleanup.
+/// Turns the model's raw span text into typed form values. Deliberately mirrors `back-end/src/services/ocr.service.js`'s extractAmount/extractDate conventions (DD/MM/YYYY assumption, digit-only amount cleanup) so the model and backend regex parser agree when both find a value.
 class ReceiptFieldNormalizer {
   static const List<String> _months = [
     'jan', 'feb', 'mar', 'apr', 'may', 'jun',
     'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
   ];
 
-  /// Strips everything but digits and `.` (matching
-  /// `ai/receipt_ner_model_test.ipynb`'s own `normalize_amount`, used there
-  /// to score the model's extractions — reusing the same rule here keeps
-  /// "the model got TOTAL right" consistent between evaluation and
-  /// production) and parses what's left. Returns null if nothing usable
-  /// remains (caller falls back to the backend regex's amount).
+  /// Strips everything but digits and `.` (matching the notebook's own `normalize_amount` used to score the model, keeping eval and production consistent) and parses what's left. Null if nothing usable remains.
   static double? parseAmount(String text) {
     final cleaned = text.replaceAll(RegExp(r'[^0-9.]'), '');
     if (cleaned.isEmpty) return null;
     return double.tryParse(cleaned);
   }
 
-  /// Tries the same 3 receipt date shapes as `ocr.service.js#extractDate`,
-  /// in the same priority order, and normalizes to ISO `yyyy-MM-dd`. Returns
-  /// null if none match (caller falls back to the backend regex's date).
+  /// Tries the same 3 date shapes as `ocr.service.js#extractDate`, same priority order, normalized to ISO `yyyy-MM-dd`. Null if none match.
   static String? parseDateToIso(String text) {
     final isoMatch = RegExp(r'(\d{4})-(\d{2})-(\d{2})').firstMatch(text);
     if (isoMatch != null) {

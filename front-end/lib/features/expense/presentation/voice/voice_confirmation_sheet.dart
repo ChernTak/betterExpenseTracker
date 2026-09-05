@@ -8,11 +8,7 @@ import '../../../../core/widgets/labeled_field.dart';
 import '../../../../services/category_service.dart';
 import 'voice_capture_controller.dart';
 
-/// Shown once VoiceCaptureController finishes parsing a wake-word-triggered
-/// utterance (FR4.4) — a human veto point before anything hits the ledger,
-/// since misheard amounts are the single biggest failure mode of ASR+regex
-/// expense entry. Every field is pre-filled but editable; nothing is saved
-/// until the user taps Save.
+/// Shown once VoiceCaptureController finishes parsing an utterance; a human veto point since misheard amounts are the biggest failure mode of ASR+regex entry. Fields are pre-filled but editable, nothing saves until Save is tapped.
 class VoiceConfirmationSheet extends StatefulWidget {
   final VoiceCaptureController controller;
 
@@ -22,10 +18,7 @@ class VoiceConfirmationSheet extends StatefulWidget {
     BuildContext context,
     VoiceCaptureController controller,
   ) {
-    // Dismissible/draggable so a wake word firing mid-task on another
-    // screen doesn't hijack it with a sheet the user can't get rid of —
-    // swiping it away or tapping the backdrop is treated the same as
-    // Discard (see _VoiceConfirmationSheetState.dispose).
+    // Dismissible/draggable; swipe-away or backdrop tap is treated as Discard (see dispose()).
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -44,12 +37,7 @@ class _VoiceConfirmationSheetState extends State<VoiceConfirmationSheet> {
   late DateTime _transactionDate;
   bool _isSaving = false;
 
-  // Set right before Save/Discard hand off to the controller and pop this
-  // sheet themselves. If the sheet closes any other way — swipe-down,
-  // backdrop tap, now that show() allows both — this stays false and
-  // dispose() below treats it as an implicit Discard, so the controller's
-  // state machine never gets stuck waiting for a resolution that isn't
-  // coming and hands-free listening actually resumes.
+  // Set right before Save/Discard pop the sheet; if it closes any other way (swipe, backdrop tap), dispose() treats it as an implicit Discard so hands-free listening still resumes.
   bool _resolved = false;
 
   @override
@@ -68,9 +56,7 @@ class _VoiceConfirmationSheetState extends State<VoiceConfirmationSheet> {
   @override
   void dispose() {
     if (!_resolved) {
-      // Swiped away or dismissed via the backdrop rather than Save/Discard
-      // — the controller still needs to clear lastParsed/lastCategorySuggestion
-      // and resume hands-free listening, same as an explicit Discard.
+      // Dismissed via swipe/backdrop rather than Save/Discard; still needs to clear state and resume hands-free listening.
       unawaited(widget.controller.cancelPending());
     }
     _amountController.dispose();
@@ -103,9 +89,7 @@ class _VoiceConfirmationSheetState extends State<VoiceConfirmationSheet> {
         transactionDate: _transactionDate,
       );
     } catch (e) {
-      // Leave _resolved false so dispose()'s implicit-cancel safety net
-      // still fires if the user gives up and swipes the sheet away instead
-      // of retrying.
+      // Leave _resolved false so dispose()'s implicit-cancel still fires if the user swipes away instead of retrying.
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(

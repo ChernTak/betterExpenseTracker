@@ -1,11 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-/// Offline-first outbox for voice-logged expenses (FR4.4). A confirmed
-/// voice expense is written here immediately, then VoiceExpenseSyncService
-/// flushes rows to POST /api/expenses/post whenever connectivity allows —
-/// so a save always succeeds locally even if the device is offline at the
-/// moment the user confirms it.
+/// Offline-first outbox for voice-logged expenses; VoiceExpenseSyncService flushes rows to the backend once connectivity allows.
 class PendingVoiceExpenseDao {
   static const _dbName = 'pending_voice_expenses.db';
   static const _table = 'pending_voice_expenses';

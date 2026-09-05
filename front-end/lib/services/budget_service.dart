@@ -4,14 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for the Budget feature (FR3.1–FR3.5).
-///
-/// Handles setting monthly category limits, fetching the real-time budget
-/// dashboard summary (current spend vs. limit per category) and reading the
-/// alert history the backend generates when a category crosses the
-/// 60/75/90% utilisation thresholds. Screens should call these methods and
-/// only handle the resulting data or the exception, never build the HTTP
-/// request themselves.
+/// Budget feature (FR3.1–FR3.5): monthly category limits, spend-vs-limit dashboard, and 60/75/90% utilisation alert history.
 class BudgetService {
   final _authService = AuthService();
 

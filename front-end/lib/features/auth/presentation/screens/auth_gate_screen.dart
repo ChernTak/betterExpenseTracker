@@ -6,11 +6,7 @@ import '../../../../route.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/fcm_service.dart';
 
-/// App startup landing spot. Resolves the Remember Me state before the user
-/// sees anything: a spinner while `AuthService.hasValidSession()` reads
-/// secure storage, then a redirect straight to the login screen, the admin
-/// screen, or the expense-tracking shell — whichever a checked "Remember me"
-/// on a previous login earns them.
+/// Startup landing spot: resolves Remember Me via AuthService.hasValidSession(), then redirects to login/admin/main.
 class AuthGateScreen extends StatefulWidget {
   const AuthGateScreen({super.key});
 
@@ -45,9 +41,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         role == 'admin' ? AppRoutes.admin : AppRoutes.main,
       );
     } catch (_) {
-      // Secure storage read failed (e.g. Android keystore invalidated after
-      // an OS update or app restore) — fall back to the login screen rather
-      // than leaving the user stuck on this spinner forever.
+      // Secure storage read failed (e.g. keystore invalidated by an OS update) — fall back to login instead of stalling here.
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.login);
     }

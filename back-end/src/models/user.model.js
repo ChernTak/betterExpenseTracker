@@ -17,9 +17,7 @@ exports.createUser = ({ email, username, passwordHash, mobileNumber }) => {
   return db.query(query, [email, username, passwordHash, mobileNumber || null]);
 };
 
-// "Continue as Guest" — a real user row with a generated email/password,
-// so every existing feature (expenses, budgets, FCM alerts) works unchanged
-// without the user creating an account first.
+// "Continue as Guest" creates a real user row with a generated email/password so existing features work unchanged.
 exports.createGuestUser = ({ email, username, passwordHash }) => {
   const query = `
     INSERT INTO users (email, username, password_hash, is_guest)
@@ -70,20 +68,14 @@ exports.updateLocationConsent = (userId, locationConsent) => {
   return db.query('UPDATE users SET location_consent = $1 WHERE user_id = $2', [locationConsent, userId]);
 };
 
-// Wraps updateLocationConsent with an append to consent_log so "when did
-// this user grant/withdraw consent" survives beyond the current boolean
-// state (see 032_consent_log.sql). Used by the self-service consent route;
-// any future admin-initiated consent change should also go through this.
+// Wraps updateLocationConsent with an append to consent_log so consent history survives beyond the current boolean; any admin-initiated change should go through this too.
 exports.recordConsentChange = async (userId, consentType, granted) => {
   const consentLogModel = require('./consentLog.model');
   await exports.updateLocationConsent(userId, granted);
   await consentLogModel.insert(userId, consentType, granted);
 };
 
-// Separate opt-in gate for the geofencing nudge feature — background/
-// always-on location monitoring is a materially bigger privacy ask than the
-// foreground-only location_consent above, so it gets its own column rather
-// than being folded into that boolean.
+// Separate column from location_consent since always-on background tracking is a materially bigger privacy ask than foreground-only.
 exports.updateBackgroundLocationConsent = (userId, granted) => {
   return db.query('UPDATE users SET background_location_consent = $1 WHERE user_id = $2', [granted, userId]);
 };
@@ -107,14 +99,7 @@ exports.updateProfile = (userId, { username, mobileNumber, profilePicture, month
   return db.query(query, [username, mobileNumber, profilePicture, monthlyIncome, userId]);
 };
 
-// FR1.7 — admin account management. password_hash is deliberately excluded
-// from every query below; the admin dashboard never needs it and it should
-// never leave the database.
-//
-// PDPA data-minimization: the list view masks mobile_number down to its
-// last 2 digits — an admin scanning the roster doesn't need the full
-// number, only the single-user detail view (findByIdForAdmin) does, and
-// that view is audit-logged as a "view_profile" action (admin.service.js).
+// password_hash is deliberately excluded from every admin query below; list view also masks mobile_number to last 2 digits (full number only via audit-logged findByIdForAdmin).
 exports.findAllForAdmin = () => {
   const query = `
     SELECT user_id, email, username,
@@ -150,20 +135,12 @@ exports.setActiveStatus = (userId, isActive) => {
   return db.query(query, [isActive, userId]);
 };
 
-// Hard delete to satisfy PDPA data-deletion requests (FR1.7), only ever
-// called after requestDeletion's grace period has elapsed (see
-// admin.service.js purgeUser). Every other table's user_id FK is ON DELETE
-// CASCADE (see migrations 002-023), so this also removes the user's
-// expenses, budgets, goals, alerts, wishlist items and OCR receipts in one
-// transaction-safe statement.
+// Hard delete, only called after requestDeletion's grace period elapses; ON DELETE CASCADE on every related table removes all the user's data in one statement.
 exports.deleteUser = (userId) => {
   return db.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id, email', [userId]);
 };
 
-// PDPA erasure with a recoverability window (033_user_deletion_request.sql)
-// — the admin "delete" action soft-deletes first: deactivates the account
-// and timestamps the request. The row itself is untouched until purgeUser
-// hard-deletes it once the grace period has passed.
+// Soft-delete: deactivates and timestamps the request; row stays untouched until purgeUser hard-deletes it after the grace period.
 exports.requestDeletion = (userId) => {
   const query = `
     UPDATE users
@@ -186,15 +163,7 @@ exports.cancelDeletionRequest = (userId) => {
   return db.query(query, [userId]);
 };
 
-// PDPA storage-limitation — "Continue as Guest" (auth.service.js guestLogin)
-// mints a brand-new users row on every tap, never reused, and the app never
-// auto-resumes a previous guest session on cold start — so an abandoned
-// guest row has no further purpose once the sitting that created it ends.
-// users.created_at alone is a false signal (the guest could keep adding
-// data for days after), so "last active" is the latest activity across
-// every table a guest can actually write to, falling back to created_at for
-// guests with none. Scoped to is_guest = TRUE — real accounts are never
-// touched here regardless of inactivity.
+// "Last active" is computed across every table a guest can write to (not just created_at, since a guest could keep adding data for days) since guest rows are never reused; only is_guest = TRUE rows are ever touched.
 exports.purgeStaleGuests = (days) => {
   const query = `
     WITH last_activity AS (

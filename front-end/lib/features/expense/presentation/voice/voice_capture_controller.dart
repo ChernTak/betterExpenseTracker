@@ -25,19 +25,7 @@ enum VoiceCaptureStatus {
   error,
 }
 
-/// State machine for FR4.4 hands-free voice expense logging — ties together
-/// wake-word detection, transcription handoff, on-device NLP parsing,
-/// category suggestion and offline-first persistence. See the class-level
-/// docs on each collaborator for what it individually owns; this class only
-/// sequences them:
-///
-/// listeningForWake --(wake word)--> transcribing --(transcript)--> parsed
-///   --(confirm)--> back to listeningForWake
-///
-/// A confirmation UI (VoiceConfirmationSheet) should observe this
-/// controller (it's a ChangeNotifier) and present [lastParsed] /
-/// [lastCategorySuggestion] once [status] becomes [VoiceCaptureStatus.parsed],
-/// then call [confirmSave] or [cancelPending].
+/// State machine for hands-free voice expense logging, sequencing wake-word detection, transcription, parsing, category suggestion and persistence: listeningForWake -> transcribing -> parsed -> (confirm) -> listeningForWake.
 class VoiceCaptureController extends ChangeNotifier {
   final WakeWordService _wakeWordService;
   final VoiceDatasource _transcriptionService;
@@ -86,11 +74,7 @@ class VoiceCaptureController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Starts continuous hands-free wake-word listening. Android only — see
-  /// WakeWordService's platform-scope doc comment; on other platforms this
-  /// resolves to [VoiceCaptureStatus.unsupportedPlatform] instead of
-  /// throwing, so callers (e.g. MainShell's mic toggle) should check
-  /// [status] afterwards rather than assuming success.
+  /// Starts continuous hands-free wake-word listening. Android only; on other platforms resolves to [VoiceCaptureStatus.unsupportedPlatform] instead of throwing, so callers should check [status] afterward.
   Future<void> startHandsFree() async {
     try {
       await _wakeWordService.start(_onWakeWordDetected);
@@ -115,30 +99,13 @@ class VoiceCaptureController extends ChangeNotifier {
   }
 
   Future<void> _onWakeWordDetected() async {
-    // The only feedback a "hands-free" feature can give someone not looking
-    // at the screen — haptic for a bag/pocket, a chime for anyone in
-    // earshot. Fired together, immediately, so there's no ambiguity about
-    // whether "Ok App" actually registered before they start talking.
+    // Haptic + chime fired together immediately, since that's the only feedback hands-free use can give without looking at the screen.
     unawaited(HapticFeedback.mediumImpact());
     unawaited(_audioFeedback.playWake());
-    // Every detection is logged before we even know the outcome — this is
-    // what lets the "Wake accuracy" summary (Profile > Support) measure how
-    // often "Ok App" triggers without ever producing a saved expense
-    // (background chatter, TV, etc.), instead of guessing at a false-positive rate.
+    // Logged before the outcome is known, so "Wake accuracy" (Profile > Support) can measure false-positive triggers instead of guessing.
     unawaited(_diagnostics.log('wake_detected'));
 
-    // WakeWordService (Vosk, always-on grammar-restricted listening) and
-    // _transcriptionService (VoiceDatasource/speech_to_text — Android's own
-    // SpeechRecognizer, chosen over Vosk's open-vocabulary mode here for
-    // accuracy; see VoiceDatasource's doc comment) are two independent
-    // microphone consumers — only one may hold it at a time.
-    // WakeWordService.stop() already pads this handoff to dodge a real
-    // native crash in vosk_flutter_2 (see its doc comment); the try/catch
-    // below is defense-in-depth for whatever that padding doesn't cover —
-    // an exception here would otherwise propagate out of this callback
-    // uncaught (it's invoked from inside WakeWordService's own stream
-    // listener), so this is the difference between "didn't catch that, try
-    // again" and the whole app going down.
+    // WakeWordService and _transcriptionService share one mic; stop() already pads the handoff against a native vosk_flutter_2 crash, and the try/catch below is defense-in-depth so an uncaught exception here doesn't take down the app.
     await _wakeWordService.stop();
     _setStatus(VoiceCaptureStatus.transcribing);
 
@@ -179,10 +146,7 @@ class VoiceCaptureController extends ChangeNotifier {
     );
   }
 
-  /// Called after the confirmation UI accepts the parsed/edited fields.
-  /// Writes straight to the offline outbox (so the save always succeeds
-  /// locally, even offline) and opportunistically tries to sync it, then
-  /// resumes hands-free listening.
+  /// Called after the confirmation UI accepts the fields; writes to the offline outbox first so save always succeeds locally, then syncs and resumes listening.
   Future<void> confirmSave({
     required double amount,
     required String category,
@@ -216,9 +180,7 @@ class VoiceCaptureController extends ChangeNotifier {
   Future<void> _resumeListeningIfActive() async {
     if (_inactiveStatuses.contains(status) &&
         status != VoiceCaptureStatus.idle) {
-      // Don't retry a setup failure (permission denied / unsupported
-      // platform / error) on every confirm-save — only an explicit
-      // re-tap of the mic toggle should attempt that again.
+      // Don't retry a setup failure automatically; only an explicit re-tap of the mic toggle should.
       return;
     }
     await startHandsFree();

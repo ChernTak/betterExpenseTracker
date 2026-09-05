@@ -60,10 +60,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// "Continue as Guest" — skips the registration form entirely by creating a
-// throwaway account behind the scenes and logging straight into it, so the
-// rest of the app (which expects a real JWT/user_id everywhere) needs no
-// special-casing for guests.
+// Creates a throwaway account and logs into it, so the rest of the app needs no special-casing for guests.
 exports.guestLogin = async (req, res) => {
   try {
     const suffix = crypto.randomBytes(6).toString('hex');
@@ -229,9 +226,7 @@ exports.updateLocationConsent = async (req, res) => {
   }
 };
 
-// Separate opt-in toggle for the geofencing high-spend-area nudge — the
-// Android side only registers geofences and requests background location
-// permission once this is granted (see profile_screen.dart).
+// Opt-in for the geofencing nudge; Android only registers geofences once this is granted (see profile_screen.dart).
 exports.updateBackgroundLocationConsent = async (req, res) => {
   const { backgroundLocationConsent } = req.body;
   if (typeof backgroundLocationConsent !== 'boolean') {

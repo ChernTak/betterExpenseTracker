@@ -3,9 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'auth_service.dart';
 
-/// Requests notification permission, obtains this device's FCM registration
-/// token and hands it to the backend (FR3.5) so budget alerts have somewhere
-/// to be pushed to. Call `registerToken()` once right after a successful login.
+/// Registers this device's FCM token with the backend (FR3.5) for budget alerts; call `registerToken()` once after login.
 class FcmService {
   final _messaging = FirebaseMessaging.instance;
   final _authService = AuthService();

@@ -71,11 +71,7 @@ exports.listContributions = (goalId, userId) => {
   return db.query(query, [goalId, userId]);
 };
 
-// Total contributed across all goals in [monthStart, monthEndExclusive) —
-// used by the dashboard's "Available to spend" figure
-// (budget.service.js#listBudgets) to reflect money already committed to
-// goals this month, same "pay yourself first" money the dashboard should
-// no longer show as spendable.
+// Feeds "Available to spend" so money already committed to goals this month isn't shown as spendable.
 exports.getContributionsTotalForMonth = (userId, monthStart, monthEndExclusive) => {
   const query = `
     SELECT COALESCE(SUM(amount), 0) AS total
@@ -85,9 +81,7 @@ exports.getContributionsTotalForMonth = (userId, monthStart, monthEndExclusive) 
   return db.query(query, [userId, monthStart, monthEndExclusive]);
 };
 
-// Inserts the contribution and bumps the parent goal's current_saved in one
-// transaction — auto-completing the goal (goal-gradient payoff) the moment
-// current_saved reaches target_amount.
+// Inserts the contribution and bumps current_saved in one transaction, auto-completing the goal once it reaches target_amount.
 exports.addContribution = async (goalId, userId, { amount, note }) => {
   const client = await db.connect();
   try {

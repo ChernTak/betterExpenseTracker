@@ -1,8 +1,6 @@
 const db = require('../config/db');
 
-// PDPA accountability trail for the admin panel (see 031_admin_audit_log.sql).
-// target_email is stamped at insert time so the row still identifies whose
-// data was touched even after a purge nulls out target_user_id.
+// target_email is stamped at insert so the row still identifies whose data was touched even after a purge nulls target_user_id.
 exports.insert = ({ adminId, action, targetUserId, targetEmail, details }) => {
   const query = `
     INSERT INTO admin_audit_log (admin_id, action, target_user_id, target_email, details)

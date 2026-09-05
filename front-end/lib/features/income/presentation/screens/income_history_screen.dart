@@ -5,10 +5,7 @@ import '../../../../core/events/expense_events.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../services/income_service.dart';
 
-/// Full income history: view, edit, and delete logged paychecks. Reached
-/// from the Insights tab's "Expected income" card — logging quickly from
-/// that card and managing history here mirrors how ManageCategoriesScreen
-/// relates to the Budgets tab's quick-add dialog.
+/// Full income history (view/edit/delete); mirrors how ManageCategoriesScreen relates to the Budgets tab's quick-add dialog.
 class IncomeHistoryScreen extends StatefulWidget {
   const IncomeHistoryScreen({super.key});
 
@@ -207,10 +204,7 @@ class _IncomeHistoryScreenState extends State<IncomeHistoryScreen> {
   }
 }
 
-/// Logs a new income event, or edits an existing one when [incomeId] is
-/// supplied. Shared between IncomeHistoryScreen and the Insights tab's
-/// quick-add "+" button (ai_insights_screen.dart), so this is public rather
-/// than a screen-private widget.
+/// Logs or edits an income event; public because it's shared between IncomeHistoryScreen and the Insights tab's quick-add button.
 class LogIncomeDialog extends StatefulWidget {
   final String? incomeId;
   final double? initialAmount;

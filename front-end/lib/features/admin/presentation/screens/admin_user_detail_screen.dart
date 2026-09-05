@@ -4,11 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../services/admin_service.dart';
 
-/// PDPA Access / Notice & Choice — the single-user detail view. Fetching it
-/// is audit-logged server-side as "view_profile" (this is deliberately the
-/// only place mobile_number appears unmasked — see AdminUsersScreen's list,
-/// which shows the masked version). Also surfaces consent history and a
-/// DSAR export action for this user.
+/// PDPA single-user detail view; fetches are audit-logged as view_profile, and this is the only place mobile_number appears unmasked.
 class AdminUserDetailScreen extends StatefulWidget {
   final String userId;
   const AdminUserDetailScreen({super.key, required this.userId});

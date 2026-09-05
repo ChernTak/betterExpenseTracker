@@ -11,9 +11,7 @@ import 'edit_expense_screen.dart';
 /// current calendar week (Monday-based), or the current calendar month.
 enum _PeriodFilter { all, daily, weekly, monthly }
 
-/// Full expense history, reached via "View All" from the Guide tab. Adding
-/// expenses happens on the persistent Input tab, so this screen has no add
-/// button of its own — but tapping an entry opens it for editing/deleting.
+/// Full expense history; no add button since adding happens on the persistent Input tab, but tapping an entry opens it for editing/deleting.
 class ExpenseListScreen extends StatefulWidget {
   const ExpenseListScreen({super.key});
 
@@ -46,9 +44,7 @@ class _ExpenseListScreenState extends State<ExpenseListScreen> {
     });
   }
 
-  // EditExpenseScreen fires expenseDataChanged on save/delete, and this
-  // screen already listens for that (above), so no manual refresh needed
-  // after the push returns.
+  // No manual refresh needed after the push returns; EditExpenseScreen fires expenseDataChanged, which we already listen for.
   void _openEditExpense(Map<String, dynamic> expense) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => EditExpenseScreen(expense: expense)));
   }

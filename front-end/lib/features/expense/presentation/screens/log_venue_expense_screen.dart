@@ -8,17 +8,7 @@ import '../../../../core/widgets/labeled_field.dart';
 import '../../../../services/category_service.dart';
 import '../../../../services/expense_service.dart';
 
-/// Logs a new expense pre-filled from a food recommendation venue (name +
-/// food_dining category) — the "close the loop" action on
-/// VenueDetailScreen: you got a recommendation, now record what you
-/// actually spent there.
-///
-/// Deliberately a separate, simpler screen rather than prefill params on
-/// AddExpenseScreen, same reasoning as EditExpenseScreen: OCR scanning,
-/// voice input and the math-mismatch banner are create-from-receipt
-/// concerns that don't apply here. Amount is intentionally left blank —
-/// the venue's RM price band is a coarse category guess, not what was
-/// actually paid, so pre-filling it risks saving a wrong amount.
+/// Logs an expense pre-filled from a food recommendation venue; the "close the loop" action on VenueDetailScreen. Separate from AddExpenseScreen for the same reasons as EditExpenseScreen. Amount is left blank since the venue's price band is only a coarse guess, not what was actually paid.
 class LogVenueExpenseScreen extends StatefulWidget {
   final String? initialMerchantName;
   final String? initialCategory;
@@ -62,9 +52,7 @@ class _LogVenueExpenseScreenState extends State<LogVenueExpenseScreen> {
     if (!mounted) return;
     setState(() {
       _categories = categories;
-      // widget.initialCategory ('food_dining') should exist for every user
-      // (a default, undeletable-by-key category), but fall back the same
-      // way AddExpenseScreen/EditExpenseScreen do if it's ever missing.
+      // fall back if the venue's default category was ever missing/deleted
       if (categories.isNotEmpty && !categories.any((c) => c.key == _category)) {
         _category = categories.first.key;
       }

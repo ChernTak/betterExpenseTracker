@@ -1,8 +1,6 @@
 const incomeModel = require('../models/income.model');
 
-// POST /api/income — logs a single income event (payday, freelance payment,
-// etc.). Manual entry since this app has no bank integration to auto-detect
-// income from.
+// POST /api/income — logs a single income event; manual entry since there's no bank integration to auto-detect it.
 exports.logIncome = async (req, res) => {
   const { amount, source, receivedDate } = req.body;
 

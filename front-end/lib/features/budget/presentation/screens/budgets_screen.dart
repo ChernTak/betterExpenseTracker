@@ -10,10 +10,7 @@ import '../../../ai_insights/presentation/screens/ai_insights_screen.dart';
 import '../../../categories/presentation/screens/manage_categories_screen.dart';
 import '../../../wishlist/presentation/screens/wishlist_screen.dart';
 
-/// The "Budgets" tab: a segmented toggle between the category limits view
-/// (progress tiles, FR3.1-FR3.4, and 60/75/90% alerts, FR3.5) and the
-/// Insights forecast (see ai_insights_screen.dart) — both are views onto the
-/// same current-month budget data, so they share this one nav slot.
+/// Budgets tab: toggles between category-limits view and Insights forecast — both views onto the same current-month budget data.
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
 
@@ -396,10 +393,7 @@ class _AlertCard extends StatelessWidget {
 
   const _AlertCard({required this.alert, required this.budgets});
 
-  // Wishlist is meant to hang off a real spending nudge rather than a
-  // standalone add button (see AddToWishlistDialog's doc comment) — tapping
-  // an alert opens it prefilled with whatever category that alert's budget
-  // was for, since the alert row itself doesn't carry the category.
+  // Wishlist hangs off a real spending nudge, not a standalone add button — tapping an alert opens it prefilled with that alert's budget category.
   void _openAddToWishlist(BuildContext context) {
     final budgetId = alert['budget_id'] as String?;
     final matchingBudget = budgets.cast<Map<String, dynamic>?>().firstWhere(

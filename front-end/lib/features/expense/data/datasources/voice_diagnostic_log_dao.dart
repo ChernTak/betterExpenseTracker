@@ -1,14 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-/// Local-only event log for FR4.4's voice pipeline (wake detections, no-speech
-/// timeouts, parse failures, STT errors, sync failures) — the "zero
-/// observability" gap for a feature that's otherwise flying blind in
-/// production. Never transmitted automatically; a user has to explicitly
-/// copy it via Profile > Support > Send Diagnostic Report
-/// (see profile_screen.dart) before any of it leaves the device, so this
-/// doesn't compromise the on-device/offline-first premise the whole feature
-/// is built on.
+/// Local-only event log for the voice pipeline; never transmitted automatically, only via user-triggered Profile > Support > Send Diagnostic Report.
 class VoiceDiagnosticLogDao {
   static const _dbName = 'voice_diagnostics.db';
   static const _table = 'voice_diagnostic_events';

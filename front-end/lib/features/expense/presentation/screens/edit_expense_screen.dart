@@ -8,14 +8,7 @@ import '../../../../core/widgets/labeled_field.dart';
 import '../../../../services/category_service.dart';
 import '../../../../services/expense_service.dart';
 
-/// Lets the user edit (or delete) a previously saved expense. Reached by
-/// tapping an entry in the Guide tab's Recent Activity feed or the full
-/// Expenses list — both were previously read-only.
-///
-/// Deliberately a separate, simpler screen rather than an "edit mode" flag
-/// on AddExpenseScreen: OCR scanning, voice input, the math-mismatch banner
-/// and the smart-suggestion tip are all create-time-only concerns that
-/// don't apply to editing an already-saved record.
+/// Lets the user edit or delete a saved expense. A separate, simpler screen rather than an "edit mode" on AddExpenseScreen, since OCR/voice/math-mismatch/suggestion features are create-time-only.
 class EditExpenseScreen extends StatefulWidget {
   final Map<String, dynamic> expense;
 

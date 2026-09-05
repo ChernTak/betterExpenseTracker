@@ -29,9 +29,7 @@ exports.createBudget = async (req, res) => {
   const targetYear = Number(req.body.year) || year;
 
   try {
-    // category used to be a fixed ENUM the DB validated automatically; it's
-    // now a per-user table, so the app layer has to check it belongs to
-    // this user before writing a budget for it.
+    // category is now a per-user table (not a DB ENUM), so check it belongs to this user before writing a budget.
     const categoryExists = await categoryModel.findByUserAndKey(req.user.userId, category);
     if (categoryExists.rows.length === 0) {
       return res.status(400).json({ message: `Unknown category: ${category}` });
@@ -72,21 +70,14 @@ exports.listBudgets = async (req, res) => {
       ]);
     const budgets = budgetsResult.rows;
 
-    // Categories with real spend this month but no budget row at all — kept
-    // separate from `budgets` (rather than injected into it) because
-    // budgets_screen.dart treats every entry in `budgets` as an editable
-    // budget (casts budget_id/monthly_limit as non-null); the dashboard
-    // (guide_screen.dart) merges this in itself for the spend chart/legend.
+    // Kept separate from `budgets` since budgets_screen.dart treats every entry there as an editable budget with non-null budget_id/monthly_limit.
     const budgetedCategories = new Set(budgets.map((b) => b.category));
     const unbudgetedSpend = categorySpendResult.rows
       .filter((r) => !budgetedCategories.has(r.category) && Number(r.spent) > 0)
       .map((r) => ({ category: r.category, spent: Number(r.spent) }));
 
     const totalLimit = budgets.reduce((sum, b) => sum + Number(b.monthly_limit), 0);
-    // Scoped to budgeted categories only, unlike totalSpentThisMonth below —
-    // otherwise setting a budget for just one category (e.g. Food & Dining)
-    // makes the Monthly Budget card's %/remaining reflect spending in every
-    // other category too, since totalLimit only covers the one you budgeted.
+    // Scoped to budgeted categories only, unlike totalSpentThisMonth below, or a single-category budget would show %/remaining polluted by unbudgeted spend.
     const totalSpent = budgets.reduce((sum, b) => sum + Number(b.current_spend), 0);
 
     const totalIncome = Number(incomeResult.rows[0].total);
@@ -184,11 +175,7 @@ function buildAlertMessage(category, alertType, remaining, utilizationPct) {
   return `You're at ${pct}% of your ${label} budget. RM${remaining.toFixed(2)} left to stay on track.`;
 }
 
-// FR3.5 — three-tier threshold check: 60-75% gentle, 75-90% warning, >90%
-// critical (matches the alert_type enum comments in 000_extensions_enums.sql).
-// Not a route handler — called directly by expense.service.js right after an
-// expense is saved, once the trg_sync_budget_spend trigger has already
-// updated current_spend for that category/month.
+// FR3.5 — three-tier threshold check (60/75/90%); called directly by expense.service.js after current_spend is updated, not a route handler.
 exports.checkAndSendAlerts = async ({ userId, category, month, year, expenseId }) => {
   const result = await budgetModel.getBudgetByCategoryMonth(userId, category, month, year);
   const budget = result.rows[0];

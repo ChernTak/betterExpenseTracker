@@ -43,10 +43,7 @@ class CategoryItem {
     );
   }
 
-  /// Used when a category key (e.g. from an older expense/ml_model_output
-  /// row) no longer has a matching row — should be rare in practice, since
-  /// deleting a category reassigns its expenses to 'other' rather than
-  /// leaving them pointed at a dangling key.
+  /// For a category key with no matching row (should be rare — deleting a category reassigns its expenses to 'other').
   factory CategoryItem.fallback(String key) => CategoryItem(
     id: '',
     key: key,
@@ -56,10 +53,7 @@ class CategoryItem {
   );
 }
 
-/// Service layer for the Categories feature (self-serve add/remove/reorder).
-/// Keeps a small static in-memory cache so widgets can look up a category's
-/// icon/color/label synchronously after the first fetch, without every
-/// screen re-fetching or this app needing a full state-management library.
+/// Categories feature (self-serve add/remove/reorder); keeps a static in-memory cache for synchronous lookups after the first fetch.
 class CategoryService {
   final _authService = AuthService();
 

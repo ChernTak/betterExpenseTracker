@@ -1,8 +1,6 @@
 import 'package:image_picker/image_picker.dart';
 
-/// Captures a receipt photo for OCR scanning (FR4.2). Wraps image_picker
-/// rather than the lower-level `camera` plugin — a full custom camera
-/// preview isn't needed here, just "take/pick a photo and get a file path".
+/// Captures a receipt photo for OCR scanning (FR4.2); uses image_picker since a full custom camera preview isn't needed.
 class CameraService {
   final ImagePicker _picker = ImagePicker();
 

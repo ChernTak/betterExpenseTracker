@@ -1,8 +1,6 @@
 const goalModel = require('../models/goal.model');
 
-// POST /api/goals — a proactive savings target the user sets up themselves
-// (goal-gradient effect: name it, give it a number and a deadline to work
-// toward). Distinct from Wishlist, which is reactive/nudge-triggered.
+// POST /api/goals — a proactive, user-set savings target; distinct from Wishlist, which is reactive/nudge-triggered.
 exports.createGoal = async (req, res) => {
   const { goalName, targetAmount, deadlineDate, priority, icon, notes } = req.body;
 

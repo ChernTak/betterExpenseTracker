@@ -1,20 +1,12 @@
 const wishlistModel = require('../models/wishlist.model');
 
-// 'converted_to_goal' is deliberately excluded here — it's only reachable
-// via convertToGoal below, which creates the goal atomically alongside the
-// status flip. Allowing it through the plain PUT would let a client set the
-// status without ever creating the goal it's supposed to imply.
+// 'converted_to_goal' is excluded here since it's only reachable via convertToGoal, which creates the goal atomically with the status flip.
 const MANUAL_STATUSES = ['pending', 'purchased', 'dismissed', 'expired'];
 // Full set, for validating the GET ?status= filter — converted items should
 // still be listable/visible even though they can't be *set* this way.
 const LISTABLE_STATUSES = [...MANUAL_STATUSES, 'converted_to_goal'];
 
-// POST /api/wishlist — a single tempting purchase being deliberately
-// delayed. Meant to be created from a real-time behavioral alert (alertId
-// set, category/merchant prefilled from that alert), not from a standalone
-// "add item" flow — see budget.service.js/nudge.service.js for the alerts
-// this is designed to hang off of. alertId is still optional so a manual
-// add isn't blocked outright.
+// POST /api/wishlist — meant to be created from a real-time behavioral alert, but alertId stays optional so manual add isn't blocked.
 exports.createWishlistItem = async (req, res) => {
   const { alertId, itemName, estimatedCost, merchantName, category, delayDays, notes } = req.body;
 
@@ -69,10 +61,7 @@ exports.listWishlist = async (req, res) => {
   }
 };
 
-// PUT /api/wishlist/:id — also how an item resolves: status: 'dismissed'
-// once the delay period is over, or status: 'purchased' which is handled
-// separately below (resolvePurchaseStatus) since it has its own gating and
-// creates a real expense row rather than just flipping a column.
+// PUT /api/wishlist/:id — status: 'purchased' is routed to resolvePurchaseStatus below since it needs its own gating and creates a real expense row.
 exports.updateWishlistItem = async (req, res) => {
   const { id } = req.params;
   const { itemName, estimatedCost, merchantName, category, status, purchasedOn, notes } = req.body;
@@ -108,11 +97,7 @@ exports.updateWishlistItem = async (req, res) => {
   }
 };
 
-// Marking an item "bought" is a hard-gated resolution, not a plain field
-// edit: it's blocked until the cooling-off delay has actually passed (the
-// whole point of the wishlist is the wait), and it creates a real expenses
-// row so the purchase shows up in the user's spending/budget totals instead
-// of silently vanishing into a status flag.
+// Marking an item "bought" is hard-gated: blocked until the cooling-off delay passes, and it creates a real expenses row instead of just a status flag.
 const resolvePurchaseStatus = async (req, res) => {
   const { id } = req.params;
   const { purchasedOn, notes } = req.body;
@@ -124,9 +109,7 @@ const resolvePurchaseStatus = async (req, res) => {
       return res.status(404).json({ message: 'Wishlist item not found' });
     }
 
-    // delay_until_date comes back as a raw 'YYYY-MM-DD' string (see db.js's
-    // DATE type parser) so a plain string comparison against today is safe
-    // and avoids the local-midnight shift a JS Date would introduce.
+    // delay_until_date is a raw 'YYYY-MM-DD' string, so plain string comparison avoids the local-midnight shift a JS Date would introduce.
     const today = new Date().toISOString().slice(0, 10);
     if (item.delay_until_date && item.delay_until_date > today) {
       return res.status(409).json({
@@ -151,11 +134,7 @@ const resolvePurchaseStatus = async (req, res) => {
   }
 };
 
-// POST /api/wishlist/:id/convert-to-goal — resolves a pending item by
-// starting a funded goal for it instead of buying now or dismissing it (see
-// wishlist.model.js#convertToGoal). targetAmount defaults to the item's
-// estimated_cost if one was set; only needs to be supplied here if the
-// item never had a cost or the user wants to save toward a different figure.
+// POST /api/wishlist/:id/convert-to-goal — targetAmount defaults to the item's estimated_cost; only supply it to override or when there's no cost set.
 exports.convertToGoal = async (req, res) => {
   const { id } = req.params;
   const { targetAmount, deadlineDate, priority } = req.body;

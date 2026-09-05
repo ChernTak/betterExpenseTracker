@@ -6,9 +6,7 @@ const List<String> kPaymentMethods = [
   'bank_transfer',
 ];
 
-// Used as a display fallback for any raw category/payment-method key that
-// doesn't otherwise have a proper label (e.g. CategoryItem.fallback in
-// category_service.dart).
+// Display fallback for a raw category/payment-method key with no proper label (see CategoryItem.fallback).
 String formatCategoryLabel(String raw) {
   return raw
       .split('_')

@@ -56,3 +56,34 @@ fyp2-submission/
 .vscode/
 .idea/
 .claude/
+
+# Empty files with no content — stray files or dead stubs from early
+# scaffolding that never got filled in (superseded by code living
+# elsewhere in the current folder structure).
+PG Local.session.sql
+README.md.txt
+back-end/src/jobs/mlOutput.model.js
+back-end/src/jobs/weekly.forecast.job.js
+back-end/src/middleware/error.middleware.js
+back-end/src/middleware/validate.middleware.js
+back-end/src/ml/anomaly.js
+back-end/src/ml/categorizer.js
+back-end/src/models/mlOutput.js
+front-end/lib/core/constants/app_strings.dart
+front-end/lib/core/di/injection_container.dart
+front-end/lib/core/errors/exceptions.dart
+front-end/lib/core/errors/failures.dart
+front-end/lib/core/utils/formatters.dart
+front-end/lib/features/ai_insights/data/datasources/location_datasource.dart
+front-end/lib/features/ai_insights/data/datasources/recommendation_ds.dart
+front-end/lib/features/ai_insights/domain/entities/recommendation.dart
+front-end/lib/features/auth/data/datasources/auth_local_ds.dart
+front-end/lib/features/auth/data/datasources/auth_remote_ds.dart
+front-end/lib/features/auth/data/repostiories/auth_repo_impl.dart
+front-end/lib/features/auth/domain/repositories/auth_repository.dart
+front-end/lib/features/auth/presentation/bloc/auth_bloc.dart
+front-end/lib/features/budget/data/datasources/budget_remote_ds.dart
+front-end/lib/features/budget/data/datasources/fcm_datasource.dart
+front-end/lib/features/budget/domain/entities/budget.dart
+front-end/lib/features/notifications/nudge_dialog.dart
+front-end/lib/services/audio_service.dart

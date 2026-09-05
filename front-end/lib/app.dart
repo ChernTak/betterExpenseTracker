@@ -9,9 +9,7 @@ class MyApp extends StatelessWidget {
   // (FR3.5) without needing a BuildContext from inside the widget tree.
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
-  // Lets NotificationHandler open AddToWishlistDialog when the user taps a
-  // budget_alert/location_nudge push notification (background or terminated
-  // app state), where there's no widget-tree BuildContext to hand it either.
+  // Lets NotificationHandler open AddToWishlistDialog from a push notification tap, with no widget-tree BuildContext available either.
   static final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
@@ -78,10 +76,7 @@ class MyApp extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(foregroundColor: AppColors.primary),
         ),
-        // Floating (not the default `fixed`) so SnackBars overlay content
-        // instead of resizing the Scaffold's bottom area — otherwise the
-        // BottomAppBar and the FAB docked in its notch get pushed up and
-        // back down every time a SnackBar shows/hides.
+        // Floating (not fixed) so SnackBars overlay content instead of pushing the BottomAppBar/FAB up and down.
         snackBarTheme: const SnackBarThemeData(
           behavior: SnackBarBehavior.floating,
         ),

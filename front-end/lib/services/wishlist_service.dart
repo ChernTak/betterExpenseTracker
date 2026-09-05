@@ -4,11 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for Wishlist — a single tempting purchase deliberately
-/// delayed. Meant to be created from a real-time behavioral alert (see
-/// budget_alert/location_nudge handling in notification_handler.dart), not
-/// from a standalone "add item" flow, though [addItem] doesn't require an
-/// alertId so a manual add still works.
+/// Wishlist: a tempting purchase deliberately delayed, normally created from a behavioral alert (notification_handler.dart), though [addItem] doesn't require an alertId so manual add still works.
 class WishlistService {
   final _authService = AuthService();
 
@@ -111,10 +107,7 @@ class WishlistService {
     }
   }
 
-  /// POST /api/wishlist/:id/convert-to-goal — resolves a pending item by
-  /// starting a funded goal for it instead of buying now or dismissing it.
-  /// [targetAmount] only needs to be passed if the item has no
-  /// estimated_cost or the user wants to save toward a different figure.
+  /// POST /api/wishlist/:id/convert-to-goal — starts a funded goal instead of buying now or dismissing. [targetAmount] only needed without an estimated_cost or to save toward a different figure.
   Future<Map<String, dynamic>> convertToGoal(
     String wishlistId, {
     double? targetAmount,

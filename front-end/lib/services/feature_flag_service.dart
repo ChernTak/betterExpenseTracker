@@ -4,16 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/api_endpoints.dart';
 
-/// Remote kill-switch check (currently just FR4.4 voice hands-free logging)
-/// — lets a bad rollout be disabled server-side without an app update.
-///
-/// Deliberately fails open: voice logging is designed to work with zero
-/// connectivity ever (that's the whole point of the offline-first NFR), so
-/// this must never make the feature depend on network access. It only
-/// checks in opportunistically (throttled to once/day, same cadence as
-/// TierBInferenceService's OTA model check) and caches the last-known value
-/// so an actual kill from the backend still reaches users within a bounded
-/// time whenever they do have connectivity.
+/// Remote kill-switch for FR4.4 voice hands-free logging; fails open and checks in throttled to once/day so the offline-first feature never depends on network access.
 class FeatureFlagService {
   static const _voiceHandsFreeKey = 'feature_flag_voice_hands_free';
   static const _lastCheckedKey = 'feature_flag_last_checked';

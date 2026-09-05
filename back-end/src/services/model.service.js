@@ -2,15 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// ai/ is a sibling of back-end/ at the repo root — this is the same
-// "versioned source of truth" location ai/train_tier_b.py already writes
-// to, so there's no separate copy to keep in sync here.
+// Points straight at the same location ai/train_tier_b.py writes to — no separate copy to keep in sync.
 const MODEL_PATH = path.join(__dirname, '..', '..', '..', 'ai', 'models', 'tier_b_regressor.tflite');
 
-// The model's "version" is just a hash of its own bytes — always accurate,
-// no separate version-tracking file to forget to update. Cached against
-// the file's mtime so a normal GET doesn't re-hash a multi-MB file every
-// request; only recomputed after ai/train_tier_b.py actually writes a new one.
+// Version is a hash of the model's own bytes, cached against mtime so a normal GET doesn't re-hash a multi-MB file.
 let cachedVersion = null;
 let cachedMtimeMs = null;
 
@@ -25,9 +20,7 @@ function computeVersion() {
   return hash;
 }
 
-// GET /api/insights/model/version — front-end/lib/services/tier_b_inference_service.dart
-// compares this against its own last-downloaded version before deciding
-// whether to fetch a fresh copy.
+// GET /api/insights/model/version — client compares this against its last-downloaded version before refetching.
 exports.getModelVersion = (req, res) => {
   try {
     return res.status(200).json({ version: computeVersion() });

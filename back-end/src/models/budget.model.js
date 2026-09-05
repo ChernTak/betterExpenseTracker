@@ -1,16 +1,6 @@
 const db = require('../config/db');
 
-// FR3.1 — creates the category's monthly limit, or updates it if the user
-// already set one for this category/month/year (unique constraint in
-// 003_budgets.sql). current_spend is otherwise only maintained by the
-// trg_sync_budget_spend trigger (012_triggers.sql) whenever an expense is
-// inserted, updated or deleted — but that trigger only matches an existing
-// budget row, so an expense recorded before this budget existed would
-// never have been counted. Seed a brand-new row's current_spend from
-// whatever's already in `expenses` for this user/category/month so it
-// isn't invisible to the utilization %/alerts from the moment it's created.
-// An existing row (the ON CONFLICT branch) is untouched here — the trigger
-// has been keeping it correct all along, so overwriting it would be wrong.
+// Seeds a new row's current_spend from existing expenses (the sync trigger only fires on future expense changes, so pre-existing ones would otherwise be missed); existing rows are left untouched since the trigger already keeps them correct.
 exports.upsertBudget = ({ userId, category, monthlyLimit, month, year, alertThreshold }) => {
   const query = `
     INSERT INTO budgets (user_id, category, monthly_limit, current_spend, month, year, alert_threshold)

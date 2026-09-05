@@ -16,9 +16,7 @@ function daysLeftInMonth(month, year) {
   return Math.max(daysInMonth - today + 1, 1); // inclusive of today, never 0
 }
 
-// Computes C_meal = remaining food_dining budget / (days left * meals/day).
-// Returns null mealCap (not 0) when the user hasn't set a food_dining
-// budget yet — callers should treat that as "no cap", not "cap of zero".
+// C_meal = remaining food_dining budget / (days left * meals/day); null mealCap means no budget set, not a cap of zero.
 exports.getDiningContext = async (userId) => {
   const { month, year } = currentMonthYear();
   const result = await budgetModel.getBudgetByCategoryMonth(userId, DINING_CATEGORY, month, year);

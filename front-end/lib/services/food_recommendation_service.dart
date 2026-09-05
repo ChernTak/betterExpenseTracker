@@ -4,14 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for the location-based food recommendation feature.
-///
-/// Sends the device's current coordinates to the backend, which computes
-/// C_meal from the user's remaining food_dining budget, filters nearby
-/// venues (OSM/Geoapify/Foursquare 3-tier fallback pipeline) to a walking
-/// radius and that cap, and returns a ranked list. Screens should call this
-/// and only handle the resulting data or the exception, never build the
-/// HTTP request themselves.
+/// Sends device coordinates to the backend, which computes the meal budget cap and ranks nearby venues (OSM/Geoapify/Foursquare fallback pipeline).
 class FoodRecommendationService {
   final _authService = AuthService();
 
@@ -57,10 +50,7 @@ class FoodRecommendationService {
     }
   }
 
-  /// GET /api/recommendations/food/venues/:provider/:providerPlaceId —
-  /// venue detail (address/phone/website), served from the backend's cache
-  /// when available so repeat opens of a popular venue don't re-hit the
-  /// provider that originally sourced it (Overpass/Geoapify/Foursquare).
+  /// GET /api/recommendations/food/venues/:provider/:providerPlaceId — venue detail, served from backend cache when available to avoid re-hitting the source provider.
   Future<Map<String, dynamic>> fetchVenueDetail(String provider, String providerPlaceId) async {
     try {
       final response = await http.get(

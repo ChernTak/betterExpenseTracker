@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Curated icon/color choices offered when adding or editing a category
-/// (Manage Categories screen) — a fixed grid rather than a full icon search
-/// or color wheel, so every category (default or custom) stays visually
-/// consistent with the rest of the app. Keys must match the backend's
-/// ICON_PRESET_KEYS/COLOR_PRESETS (back-end/src/config/categories.js)
-/// exactly, since the backend validates against the same list.
+/// Fixed icon/color grid for categories; keys must match the backend's ICON_PRESET_KEYS/COLOR_PRESETS exactly.
 const Map<String, IconData> kCategoryIconPresets = {
   'restaurant': Icons.restaurant,
   'directions_bus': Icons.directions_bus,
@@ -65,10 +60,7 @@ const List<String> kCategoryColorPresets = [
   '#FFA000',
 ];
 
-/// Icon shown for a category key with no matching preset (e.g. historical
-/// data pointing at a since-deleted category) — never actually assignable
-/// through the picker, since every category is created with one of the
-/// presets above.
+/// Fallback icon for a category key with no matching preset (e.g. a deleted category) — never assignable via the picker itself.
 const IconData kFallbackCategoryIcon = Icons.receipt_long;
 
 Color hexToColor(String hex) {

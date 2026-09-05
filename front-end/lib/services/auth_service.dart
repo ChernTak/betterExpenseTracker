@@ -5,29 +5,15 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import '../features/auth/domain/entities/user.dart';
 
-/// Service layer for the Auth feature.
-///
-/// Handles registration, login and password reset calls to the backend,
-/// plus secure on-device storage of the JWT session token. Screens should
-/// call these methods rather than building HTTP requests themselves.
+/// Handles registration, login, password reset, and secure storage of the JWT session token.
 class AuthService {
   static const _storage = FlutterSecureStorage();
   static const _tokenKey = 'jwt_token';
-  // FR1.7 — the JWT already carries `role` (see back-end auth.service.js),
-  // but nothing previously read it client-side. Persisting it lets the app
-  // route admin accounts to the admin screen instead of the expense-tracking
-  // shell, without decoding the token on every screen that needs to know.
+  // Persisted so the app can route admin accounts without decoding the JWT on every screen (FR1.7).
   static const _roleKey = 'user_role';
-  // FR1.7 — AdminUsersScreen needs to know which row in the user list is
-  // "me" so it can hide the deactivate/delete actions on the admin's own
-  // account (comparing by role alone was wrong: it hid the buttons on
-  // every admin row, not just the logged-in admin's own).
+  // Lets AdminUsersScreen hide deactivate/delete on the admin's own row specifically, not every admin row.
   static const _userIdKey = 'user_id';
-  // Remember Me — whether a persisted session should survive an app
-  // restart. The token itself is always written to secure storage so the
-  // rest of the app can call the API during the current run; this flag is
-  // what AuthGate checks on cold start to decide whether to resume that
-  // session or force the user back to the login screen.
+  // Whether AuthGate should resume a leftover session on cold start, independent of the token itself.
   static const _rememberMeKey = 'remember_me';
 
   // Shared by login() and continueAsGuest() — both return the same
@@ -73,11 +59,7 @@ class AuthService {
     }
   }
 
-  /// POST /api/auth/login — saves the JWT token to secure storage on success.
-  ///
-  /// [rememberMe] controls whether AuthGate resumes this session on the next
-  /// cold start (see setRememberMe/hasValidSession below); it doesn't affect
-  /// the token's own validity during the current run.
+  /// POST /api/auth/login — saves the JWT to secure storage; [rememberMe] only controls resume-on-cold-start, not this run's validity.
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -229,10 +211,7 @@ class AuthService {
     }
   }
 
-  /// PUT /api/auth/background-location-consent — explicit, separate opt-in
-  /// from updateLocationConsent above for the geofencing nudge feature,
-  /// since background/always-on monitoring is a bigger privacy ask than the
-  /// foreground-only food-recommendation location fetch.
+  /// PUT /api/auth/background-location-consent — separate opt-in from updateLocationConsent since always-on tracking is a bigger privacy ask.
   Future<void> updateBackgroundLocationConsent(bool consent) async {
     final token = await getToken();
     if (token == null) return;
@@ -296,16 +275,7 @@ class AuthService {
   Future<bool> getRememberMe() async =>
       (await _storage.read(key: _rememberMeKey)) == 'true';
 
-  /// Called once at app startup by AuthGate. A token is always left in
-  /// secure storage after login so the rest of the app can keep calling the
-  /// API for the current run — this is what decides whether that leftover
-  /// session from a previous run is allowed to resume, or should be wiped
-  /// so the user lands back on the login screen.
-  ///
-  /// login()/continueAsGuest() always write an explicit 'true'/'false' for
-  /// remember_me, but a session written by an app version that predates this
-  /// key has it entirely absent — that's a legacy session, not an opt-out,
-  /// so only an explicit 'false' triggers the wipe.
+  /// Called once at startup by AuthGate to decide whether to resume a leftover session or wipe it; a missing (pre-upgrade) key is treated as legacy, not opt-out, so only an explicit 'false' wipes it.
   Future<bool> hasValidSession() async {
     final storedRememberMe = await _storage.read(key: _rememberMeKey);
     if (storedRememberMe == 'false') {

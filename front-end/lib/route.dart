@@ -12,9 +12,7 @@ class AppRoutes {
   static const String login = '/login';
   static const String main = '/main';
   static const String expenses = '/expenses';
-  // FR1.7 — the System Administrator's landing screen (see route.dart usage
-  // in login_screen.dart, which branches here instead of `main` based on the
-  // role returned by /api/auth/login).
+  // FR1.7 admin landing screen — login_screen.dart branches here instead of `main` based on the role from /api/auth/login.
   static const String admin = '/admin';
 
   static final Map<String, WidgetBuilder> routes = {

@@ -1,11 +1,7 @@
 import '../features/expense/data/datasources/pending_voice_expense_dao.dart';
 import 'expense_service.dart';
 
-/// Flushes the offline outbox PendingVoiceExpenseDao writes to on every
-/// confirmed voice expense (FR4.4), posting each row to the same
-/// POST /api/expenses/post endpoint Manual/Scan entry already use. Rows
-/// that fail to sync (offline, backend unreachable) are left in the outbox
-/// for the next call rather than retried in a loop here.
+/// Flushes the offline outbox to POST /api/expenses/post; rows that fail to sync are left queued rather than retried in a loop here.
 class VoiceExpenseSyncService {
   final PendingVoiceExpenseDao _outbox;
   final ExpenseService _expenseService;
@@ -16,9 +12,7 @@ class VoiceExpenseSyncService {
   }) : _outbox = outbox ?? PendingVoiceExpenseDao(),
        _expenseService = expenseService ?? ExpenseService();
 
-  /// Attempts to sync every pending row. Safe to call opportunistically
-  /// (app resume, after a fresh save, connectivity regained) — rows that
-  /// fail simply stay queued for the next attempt.
+  /// Safe to call opportunistically (app resume, after a save, connectivity regained) — failures just stay queued.
   Future<void> flushPending() async {
     final pending = await _outbox.listPending();
 

@@ -1,6 +1,4 @@
-// Matches the expense_category enum (000_extensions_enums.sql). Kept as a
-// plain list here (rather than querying pg_enum) so the keyword/embedding
-// layers below can reference it without a DB round-trip.
+// Mirrors the expense_category enum; kept as a plain list so keyword/embedding matching below can use it without a DB round-trip.
 const CATEGORIES = [
   'food_dining',
   'transport',
@@ -17,10 +15,7 @@ const CATEGORIES = [
   'other',
 ];
 
-// One short descriptive sentence per category — embedded once at startup
-// and compared against incoming merchant text via cosine similarity when
-// the keyword pass below doesn't match. Edit freely; no code changes
-// needed elsewhere to add/adjust a description.
+// One sentence per category, embedded at startup and compared via cosine similarity when the keyword pass below doesn't match.
 const CATEGORY_DESCRIPTIONS = {
   food_dining: 'Restaurants, cafes, coffee shops, fast food and dining out.',
   transport: 'Ride-hailing, tolls, fuel, parking, public transit and taxis.',
@@ -37,11 +32,7 @@ const CATEGORY_DESCRIPTIONS = {
   other: 'Miscellaneous purchases that do not fit another category.',
 };
 
-// Mock starter dictionary: normalized merchant keyword -> category. Checked
-// as a substring match against the normalized merchant text (see
-// categorization.service.js). Keep entries lowercase with no punctuation,
-// since that's the form normalizeMerchantText() produces. Add more entries
-// here as real merchant data comes in — no other file needs to change.
+// Mock starter dictionary: normalized merchant keyword -> category, substring-matched against normalizeMerchantText() output (lowercase, no punctuation).
 const KEYWORD_MAP = {
   // food_dining
   starbucks: 'food_dining',
@@ -151,13 +142,7 @@ const KEYWORD_MAP = {
   asnb: 'investment',
 };
 
-// Seeded into a user's own `categories` row set at signup (see
-// category.model.js#seedDefaultsForUser) — icon/color match what
-// expense_categories.dart's old hardcoded switch statements used to render,
-// so seeded defaults look identical to what existed before this feature.
-// `other` is the only protected (undeletable) category: every category
-// delete reassigns that category's expenses to `other`, so there must
-// always be a safe landing spot.
+// Seeded as each user's default categories at signup; `other` is protected since category deletes reassign expenses to it.
 const DEFAULT_CATEGORIES = [
   { key: 'food_dining', label: 'Food Dining', icon: 'restaurant', color: '#E58A3B' },
   { key: 'transport', label: 'Transport', icon: 'directions_bus', color: '#3B82C4' },
@@ -174,9 +159,7 @@ const DEFAULT_CATEGORIES = [
   { key: 'other', label: 'Other', icon: 'receipt_long', color: '#8B8F97', isProtected: true },
 ];
 
-// Must match the frontend's kCategoryIconPresets keys exactly (front-end/lib/
-// core/constants/category_presets.dart) — validated against on create/update
-// so a category can never be saved with an icon key the app can't render.
+// Must match the frontend's kCategoryIconPresets keys exactly, or a category could be saved with an icon key the app can't render.
 const ICON_PRESET_KEYS = [
   'restaurant', 'directions_bus', 'shopping_bag', 'local_grocery_store', 'movie',
   'medical_services', 'bolt', 'school', 'flight', 'spa', 'subscriptions', 'trending_up',

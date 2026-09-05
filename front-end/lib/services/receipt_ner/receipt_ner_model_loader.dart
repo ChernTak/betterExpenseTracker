@@ -9,25 +9,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../auth_service.dart';
 
-/// OTA delivery for the on-device receipt NER model (LayoutLMv3) — follows
-/// `TierBInferenceService`'s pattern (versioned check throttled to once/day,
-/// `SharedPreferences`-tracked version, app-documents-dir storage) with two
-/// differences forced by this model being ~10,000x larger (153MB vs. 14KB):
-///
-/// - **Streamed to disk**, not buffered whole in memory
-///   (`http.get(...).bodyBytes`, Tier B's approach, would hold the entire
-///   153MB response in RAM at once).
-/// - **No bundled-asset fallback.** Tier B ships a small default `.tflite`
-///   in the APK so it always has *something* to run; bundling 153MB isn't
-///   viable, so this is OTA-only — if nothing's been downloaded yet (or the
-///   download/load fails), [loadInterpreter] returns null and the caller
-///   (see plan Stage 6) treats that exactly like "v3 found nothing": skip
-///   on-device extraction and rely entirely on the backend regex parser.
-///
-/// Downloads to a `.part` temp file first and renames it into place only
-/// once the stream completes — a receipt scan happening mid-download (or a
-/// dropped connection) must never leave a truncated file behind that a
-/// later `Interpreter.fromFile` call would treat as a valid model.
+/// OTA delivery for the on-device receipt NER model (LayoutLMv3) — like `TierBInferenceService` but streamed to disk (not buffered in RAM) and OTA-only with no bundled fallback, since this model is ~10,000x larger (153MB vs 14KB); downloads to a `.part` file and renames into place only once complete, so a mid-download failure never leaves a truncated file that looks valid.
 class ReceiptNerModelLoader {
   static Interpreter? _interpreter;
 
@@ -98,10 +80,7 @@ class ReceiptNerModelLoader {
     }
   }
 
-  /// Returns null if no model has ever been successfully downloaded, or the
-  /// file on disk fails to load (corrupt/incompatible) — the caller must
-  /// treat that as "on-device extraction unavailable this time" and fall
-  /// back to the backend regex parser, not throw.
+  /// Returns null (never throws) if no model has been downloaded or the file fails to load — caller falls back to the backend regex parser.
   Future<Interpreter?> loadInterpreter() async {
     if (_interpreter != null) return _interpreter;
 

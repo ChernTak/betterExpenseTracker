@@ -1,21 +1,4 @@
-// Photo enrichment for food recommendation venues. New Places API (v1) is
-// primary; the legacy Find Place/Place Photo API is an automatic fallback.
-//
-// Why both exist: the New API's `photos` field came back completely empty
-// on every request tried during initial implementation (confirmed 4
-// different ways — Place Details and Search, header and query-param field
-// masks), even though every other requested field worked fine. It started
-// working again later the same session with no code change on our side —
-// almost certainly a billing-SKU propagation delay on Google's end, not
-// anything actually wrong with the request. Since that failure mode is
-// outside our control and could recur, the legacy path (proven working
-// throughout) stays as a live fallback rather than being deleted.
-//
-// The two APIs use incompatible photo reference formats and different
-// media endpoints, so every reference this module hands back is tagged
-// with which API produced it — callers (recommendation.service.js) must
-// carry that tag alongside the reference (see venue_cache.photo_api) so
-// fetchPhotoBytes later knows which endpoint to call.
+// New Places API is primary; legacy API stays as an automatic fallback since New API's `photos` field has intermittently come back empty (likely a Google billing-SKU delay), and each reference is tagged with which API produced it since the two use incompatible formats.
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const NEW_API_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
@@ -82,12 +65,7 @@ async function findPhotoReferenceLegacy({ name, lat, lng }, { radiusM, timeoutMs
   return data.candidates?.[0]?.photos?.[0]?.photo_reference ?? null;
 }
 
-// Looks up a venue by name near a point and returns { reference, api }, or
-// null if unconfigured, no match anywhere, or the match has no photos.
-// Never throws — a photo lookup failing shouldn't break the recommendation
-// list it's enriching. Tries the New API first, falls back to the legacy
-// API on any failure (network error, timeout, or a "200 OK but no photo"
-// response — the exact symptom seen when the New API's field was empty).
+// Never throws — a photo lookup failing shouldn't break the recommendation list it's enriching.
 exports.findPhotoReference = async ({ name, lat, lng }, options) => {
   if (!isConfigured || !name) return null;
 
@@ -108,10 +86,7 @@ exports.findPhotoReference = async ({ name, lat, lng }, options) => {
   return null;
 };
 
-// Fetches the actual photo bytes for a { reference, api } pair, dispatched
-// to whichever media endpoint matches. `fetch` follows both APIs'
-// redirects automatically. Returns { buffer, contentType } or null so the
-// route can 404 cleanly instead of proxying an error page.
+// Returns { buffer, contentType } or null so the route can 404 cleanly instead of proxying an error page.
 exports.fetchPhotoBytes = async ({ reference, api }, { maxWidth, timeoutMs }) => {
   if (!isConfigured) return null;
 

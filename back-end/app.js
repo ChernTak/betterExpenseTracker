@@ -45,19 +45,14 @@ app.use('/api/config', configRoutes);
 const nudgeRoutes = require('./src/routes/nudge.routes');
 app.use('/api/nudge', nudgeRoutes);
 
-// `require.main === module` is only true when this file is run directly
-// (`node app.js`), not when the test suite `require`s it via supertest —
-// so `npm test` gets the same routed app without also binding a real port
-// or paying for the (network-downloaded) embedding model warm-up.
+// True only when run directly (`node app.js`), not when supertest `require`s it — so `npm test` skips binding a real port and the embedding warm-up.
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}...`);
   });
 
-  // Warm up the embedding model and category embeddings in the background so
-  // the first /api/expenses/categorize call that needs the embedding fallback
-  // isn't the one paying for the model download/load.
+  // Warm up the embedding model/category embeddings in background so the first categorize call isn't the one paying for the download/load.
   const embeddingService = require('./src/services/embedding.service');
   embeddingService
     .preload()

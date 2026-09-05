@@ -13,9 +13,7 @@ exports.postData = async (req, res) => {
     });
   }
 
-  // category used to be a fixed ENUM the DB validated automatically; it's
-  // now a per-user table, so the app layer has to check it belongs to this
-  // user before writing an expense for it.
+  // category is now a per-user table, not a DB-validated ENUM, so check ownership here.
   const categoryExists = await categoryModel.findByUserAndKey(userId, category);
   if (categoryExists.rows.length === 0) {
     return res.status(400).json({ message: `Unknown category: ${category}` });
@@ -39,18 +37,14 @@ exports.postData = async (req, res) => {
         data: created
       });
 
-      // FR4.3 — tie the OCR audit row (if this expense came from a scanned
-      // receipt) to the expense it became. Fire-and-forget: this is an
-      // audit trail, not something the save should ever fail on.
+      // FR4.3 — link OCR audit row to the created expense; fire-and-forget, must not block the save.
       if (receipt_id) {
         ocrModel
           .linkExpense(receipt_id, created.expense_id, userId)
           .catch((err) => console.error('Failed to link OCR receipt', err));
       }
 
-      // FR3.5 — check the 60/75/90% budget thresholds now that
-      // trg_sync_budget_spend (012_triggers.sql) has updated current_spend.
-      // Fire-and-forget: a slow/failed push must not delay the response above.
+      // FR3.5 — check 60/75/90% budget thresholds now that current_spend is updated; fire-and-forget.
       const txDate = new Date(created.transaction_date);
       budgetService
         .checkAndSendAlerts({

@@ -4,12 +4,7 @@ import 'package:http/http.dart' as http;
 import '../core/constants/api_endpoints.dart';
 import 'auth_service.dart';
 
-/// Service layer for the Expense feature.
-///
-/// Every network call the app makes to the `/api/expenses` backend routes
-/// lives here, not inside UI widgets. Screens should call these methods and
-/// only handle the resulting data or the exception, never build the
-/// HTTP request themselves.
+/// Every network call to the `/api/expenses` backend routes lives here, not inside UI widgets.
 class ExpenseService {
   final _authService = AuthService();
 

@@ -5,10 +5,7 @@ import '../../../../core/events/expense_events.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../services/goal_service.dart';
 
-/// Savings Goals: proactive, cumulative targets the user sets up themselves
-/// (goal-gradient effect — name it, give it a number and a deadline, watch
-/// the bar fill as contributions come in). Reached from Settings, distinct
-/// from Wishlist which is reactive/nudge-triggered.
+/// Savings Goals: proactive, user-set cumulative targets (goal-gradient effect), distinct from the reactive/nudge-triggered Wishlist.
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
 
@@ -282,9 +279,7 @@ class _GoalTile extends StatelessWidget {
   }
 }
 
-/// Handles both creating a new goal and editing an existing one's name,
-/// target, deadline or notes — status/current_saved are managed elsewhere
-/// (contributions, or the auto-complete-at-target rule on the backend).
+/// Creates or edits a goal's name/target/deadline/notes; status and current_saved are managed elsewhere.
 class GoalFormDialog extends StatefulWidget {
   final String? goalId;
   final String? initialName;
@@ -463,9 +458,7 @@ class _GoalFormDialogState extends State<GoalFormDialog> {
   }
 }
 
-/// Logs a contribution toward a goal — the moment the progress bar actually
-/// moves. Kept separate from GoalFormDialog since it's a different action
-/// (adding money) from editing the goal's own details.
+/// Logs a contribution to a goal; kept separate from GoalFormDialog since adding money is a different action from editing details.
 class ContributeDialog extends StatefulWidget {
   final String goalId;
   final String goalName;
@@ -506,10 +499,7 @@ class _ContributeDialogState extends State<ContributeDialog> {
             ? null
             : _noteController.text.trim(),
       );
-      // Reuses the expense-change bus as a general "financial data changed"
-      // signal — same pattern income_history_screen.dart already relies on
-      // — so the Guide dashboard's "Available to spend" / goal-commitment
-      // line don't go stale after a contribution.
+      // Reuses the expense-change bus as a general "financial data changed" signal so the Guide dashboard doesn't go stale.
       notifyExpenseDataChanged();
       if (!mounted) return;
       Navigator.pop(context, true);

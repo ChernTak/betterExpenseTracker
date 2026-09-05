@@ -11,12 +11,7 @@ import '../../../../services/forecast_service.dart';
 import '../../../../services/tier_b_inference_service.dart';
 import '../../../income/presentation/screens/income_history_screen.dart';
 
-/// The "Insights" tab: the end-of-month spend forecast (fixed bills still
-/// due, projected variable spend, and today's safe-to-spend allowance).
-/// Tier A (recurring bills) and the baseline heuristic come from
-/// GET /api/insights/forecast; Tier B's variable-spend projection is then
-/// optionally refined on-device via TierBInferenceService, overriding the
-/// heuristic when the bundled model succeeds.
+/// End-of-month spend forecast: Tier A/baseline from GET /api/insights/forecast, optionally refined on-device by Tier B (TierBInferenceService).
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
 
@@ -74,11 +69,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
     final now = DateTime.now();
     final modelVersion = await _tierBInferenceService.currentModelVersion();
-    // Logged as p10=p50=p90 (all equal to the single point estimate) since
-    // this is a point-estimate model, not a quantile one — see
-    // ai/train_tier_b.py for why. Keeps forecast_predictions_log's schema
-    // and evaluate_tier_b.py usable without a migration if quantiles come
-    // back later.
+    // Logged as p10=p50=p90 since this is a point-estimate model, not quantile (see ai/train_tier_b.py) — keeps the log schema migration-free if quantiles return.
     unawaited(
       _forecastService.logPrediction(
         month: now.month,
@@ -332,11 +323,7 @@ class _FixedBillsCard extends StatelessWidget {
   }
 }
 
-/// Tier C — probabilistic income/payday prediction
-/// (back-end/src/ml/income_forecaster.js). Additive/informational only: it
-/// does not feed into _SafeToSpendCard's number above. Shows one tile per
-/// detected recurring income source (e.g. "Salary"), or a prompt to log a
-/// paycheck if nothing recurring has been detected yet.
+/// Tier C income/payday prediction — informational only, doesn't feed into _SafeToSpendCard's number above.
 class _ExpectedIncomeCard extends StatelessWidget {
   final Map<String, dynamic> forecast;
   final VoidCallback onLogged;
@@ -460,10 +447,7 @@ class _ExpectedIncomeTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // `label` comes from the user-typed income source (income
-              // history "source" field) — unbounded length, unlike the
-              // static labels elsewhere in this Row pattern, so it needs
-              // Expanded + ellipsis or a long source name overflows.
+              // `label` is user-typed (unbounded length), unlike other static labels here, so it needs Expanded + ellipsis to avoid overflow.
               Expanded(
                 child: Text(
                   label,

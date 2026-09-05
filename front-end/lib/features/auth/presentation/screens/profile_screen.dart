@@ -10,9 +10,7 @@ import '../../../../services/auth_service.dart';
 import '../../../../services/geofence_service.dart';
 import '../../domain/entities/user.dart';
 
-/// The "Settings" tab: account info plus a growing list of settings rows.
-/// Each row is a self-contained tile so new destinations/toggles can be
-/// added here without restructuring the screen.
+/// Settings tab: account info plus self-contained tiles so new rows can be added without restructuring.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -62,10 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Turning this on requires a second, separate Android permission prompt
-  // (background/"Always" location, on top of the foreground grant) before
-  // the backend consent flag is even set — so unlike _toggleLocationConsent,
-  // failure here means "permission wasn't granted", not just "network error".
+  // Requires a separate Android background-location permission prompt before the consent flag is set, so failure here means permission denial, not just a network error.
   Future<void> _toggleBackgroundLocationConsent(bool value) async {
     setState(() => _savingBackgroundLocationConsent = true);
     try {
@@ -135,9 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirmed != true) return;
 
-    // Wipe the natively-cached token before clearing secure storage, so a
-    // logged-out session can't keep authenticating a background geofence
-    // callback under a now-stale token.
+    // Wipe the natively-cached token before clearing secure storage, so a logged-out session can't keep authenticating a background geofence callback.
     await _geofenceService.disable();
     await _authService.logout();
     if (!mounted) return;
@@ -148,15 +141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // FR4.4's voice pipeline has no automatic telemetry (deliberately — it's
-  // built to be fully on-device/offline), so this is the only way to get
-  // real debugging signal when a user reports hands-free "not working":
-  // they explicitly review and copy their own local event log, nothing is
-  // ever sent automatically.
-  //
-  // limit: 200 matches VoiceDiagnosticLogDao's own retention cap, so this
-  // sees (and the accuracy summary below counts) everything the device
-  // still has, not just a recent slice of it.
+  // Voice pipeline has no automatic telemetry (fully on-device) — this is the only debugging signal, and limit:200 matches the DAO's own retention cap so it sees everything the device still has.
   Future<void> _showVoiceDiagnostics() async {
     final events = await VoiceDiagnosticLogDao().recentEvents(limit: 200);
     if (!mounted) return;
@@ -229,13 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // A proxy, not a lab-measured false-positive rate: there's no ground
-  // truth for "did the user actually mean to say Ok App", only what
-  // happened afterwards. A wake detection that never turns into a saved
-  // expense (no speech heard, couldn't parse an amount, or the user
-  // discarded it) is the closest available signal — background chatter/TV
-  // triggering the grammar would show up here as a wake with no matching
-  // save. Returns null if there's no wake_detected event to summarize yet.
+  // A proxy, not a lab-measured false-positive rate — a wake that never becomes a saved expense is the closest available signal for an accidental trigger.
   String? _summarizeWakeAccuracy(List<Map<String, dynamic>> events) {
     final counts = <String, int>{};
     for (final e in events) {

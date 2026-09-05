@@ -1,8 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 
-/// Wraps `geolocator` for the food-recommendation feature. Denial/disabled
-/// service returns null rather than throwing — same "don't crash the flow"
-/// pattern as fcm_service.dart's permission handling.
+/// Wraps `geolocator` for food recommendations; denial/disabled returns null instead of throwing, same as fcm_service.dart.
 class GpsService {
   Future<Position?> getCurrentPosition() async {
     try {

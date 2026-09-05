@@ -5,9 +5,7 @@ import '../core/constants/api_endpoints.dart';
 import '../features/expense/data/datasources/vendor_cache_dao.dart';
 import 'auth_service.dart';
 
-/// Where a suggested category came from — lets the UI decide whether to
-/// show a "needs review" hint and whether picking a different category
-/// afterwards counts as a correction worth caching.
+/// Where a suggested category came from, so the UI knows whether to flag it for review.
 class CategorySuggestion {
   final String category;
   final double confidence;
@@ -22,12 +20,7 @@ class CategorySuggestion {
   });
 }
 
-/// Suggests a spending category for merchant text pulled from Manual entry,
-/// Voice/NLP extraction, or OCR.
-///
-/// Resolution order: (1) local vendor cache lookup — instant, offline;
-/// (2) on a cache miss, call the backend classify endpoint; (3) cache the
-/// result locally so the next occurrence of the same merchant is instant.
+/// Suggests a spending category for merchant text (manual/voice/OCR): cache lookup, then backend classify on a miss, caching the result.
 class AutoCategorizationService {
   static const double _confidenceThreshold = 0.75;
 
@@ -46,10 +39,7 @@ class AutoCategorizationService {
     };
   }
 
-  /// [source] identifies which input channel the merchant text came from
-  /// ('manual', 'voice', 'ocr'). It doesn't change the resolution order —
-  /// it's only there for callers that want to log/display where the text
-  /// originated.
+  /// [source] ('manual', 'voice', 'ocr') is just for logging/display — doesn't affect resolution order.
   Future<CategorySuggestion> categorize(
     String merchantText, {
     String source = 'manual',
@@ -111,9 +101,7 @@ class AutoCategorizationService {
     }
   }
 
-  /// Called when the user manually fixes a suggested category — writes
-  /// straight to the local cache so this merchant is categorized correctly
-  /// from now on, without waiting for the backend to relearn anything.
+  /// Writes a user correction straight to the local cache, without waiting on the backend to relearn.
   Future<void> recordCorrection(String merchantText, String category) async {
     final trimmed = merchantText.trim();
     if (trimmed.isEmpty) return;

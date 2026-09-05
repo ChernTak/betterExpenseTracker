@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../services/admin_service.dart';
 
-/// PDPA data-minimization / storage-limitation — a home for admin-triggered
-/// retention purges, since this app has no job scheduler to run them
-/// automatically. Each section below is a self-contained threshold + purge
-/// action for one category of data with no automatic expiry.
+/// PDPA storage-limitation: admin-triggered retention purges, since this app has no job scheduler to run them automatically.
 class AdminDataRetentionScreen extends StatelessWidget {
   const AdminDataRetentionScreen({super.key});
 

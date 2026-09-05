@@ -59,15 +59,7 @@ function withinMealCap(venue, mealCap) {
   return band.min <= mealCap;
 }
 
-// Soft utility ranking: proximity + price margin below cap + cuisine
-// preference + personal visit history + optional halal boost. Weighted
-// 0.25/0.25/0.1/0.25/0.15 — visitScore keeps real weight (comparable to
-// price fit) since it's the one signal Google Maps structurally can't have
-// (a real financial commitment, not a click/rating), but proximity+price
-// together still outweigh it so a budget/distance mismatch isn't overridden
-// by "you've eaten here before". No ML, just a composite score so cold-start
-// (no purchase history, no filters set) users still get a sensible order —
-// every optional term is simply 0 then.
+// Weighted composite (0.25/0.25/0.1/0.25/0.15): visitScore carries real weight since real spend is a signal Google Maps can't have, but proximity+price still outweigh it; cold-start users just get 0 on the optional terms.
 function scoreVenue(venue, { mealCap, radiusM, preferredCuisines, visitHistory, halalPreferred }) {
   const proximityScore = 1 - Math.min(venue.distanceM / radiusM, 1);
 
@@ -77,10 +69,7 @@ function scoreVenue(venue, { mealCap, radiusM, preferredCuisines, visitHistory, 
     priceScore = Math.max(0, Math.min(margin, 1));
   }
 
-  // Substring, not exact match — Overpass/Geoapify categories are generic
-  // type strings ("restaurant") but Foursquare's are specific cuisine names
-  // ("Tempura Restaurant"); exact match would silently never match
-  // Foursquare-sourced venues at all.
+  // Substring match, not exact — an exact match would silently never match Foursquare's specific cuisine-name categories.
   const prefScore =
     preferredCuisines.length > 0 &&
     venue.categories.some((c) => preferredCuisines.some((pref) => c.toLowerCase().includes(pref)))
@@ -92,10 +81,7 @@ function scoreVenue(venue, { mealCap, radiusM, preferredCuisines, visitHistory, 
   const visitCount = visitHistory.get(normalizeMerchantText(venue.name || '')) ?? 0;
   const visitScore = Math.min(visitCount / 3, 1);
 
-  // Only non-zero when the user opted in AND the venue is confirmed halal —
-  // never penalizes unconfirmed venues (dietary tagging is sparse; absence
-  // means "unknown", not "not halal" — see plan). Zero for everyone when
-  // the preference isn't set, same no-op shape as prefScore.
+  // Only non-zero when opted in AND confirmed halal — never penalizes unconfirmed venues, since absence means "unknown", not "not halal".
   const halalScore = halalPreferred && venue.dietary?.halal === true ? 1 : 0;
 
   return 0.25 * proximityScore + 0.25 * priceScore + 0.1 * prefScore + 0.25 * visitScore + 0.15 * halalScore;
@@ -107,11 +93,7 @@ function photoUrlFor(photoReference, photoApi) {
     : null;
 }
 
-// Enriches each ranked venue with a photoUrl, cache-first: a venue already
-// carrying a fresh photo_reference (from a prior search or detail view)
-// skips the Google call entirely. Runs the whole batch in parallel — one
-// venue's lookup failing resolves to null rather than rejecting the others
-// (same defensive-per-item style as config/maps.js#searchVenues's tiers).
+// Cache-first photo enrichment, run in parallel; one venue's lookup failing resolves to null rather than rejecting the rest.
 async function enrichWithPhotos(venues, { radiusM }) {
   return Promise.all(
     venues.map(async (venue) => {
@@ -168,10 +150,7 @@ exports.getFoodRecommendations = async (req, res) => {
   // visited, unset/anything else = no filter (the common case).
   const visitFilter = req.query.visitFilter === 'new' || req.query.visitFilter === 'visited' ? req.query.visitFilter : null;
 
-  // Assembled once per request from config/dining.js (env-overridable
-  // defaults) — everything below this point (location.service.js,
-  // config/maps.js) only ever sees these as explicit parameters, never
-  // reads config/dining.js or process.env itself.
+  // Everything below this point only ever sees these as explicit parameters, never reads config/dining.js or process.env itself.
   const query = { lat, lng, radiusM, categories: FOOD_CATEGORIES, resultLimit: FOOD_RESULT_LIMIT };
   const options = {
     minResultThreshold: FOOD_MIN_RESULT_THRESHOLD,
@@ -185,9 +164,7 @@ exports.getFoodRecommendations = async (req, res) => {
   try {
     const context = await contextService.getDiningContext(req.user.userId);
 
-    // "You've been here before" personalization — a Map of normalized
-    // merchant name -> how many food_dining expenses were ever logged
-    // against it. Built once per request, fed into scoreVenue below.
+    // "You've been here before" personalization: Map of normalized merchant name -> visit count, fed into scoreVenue below.
     const history = await expenseModel.getFoodDiningMerchantHistory(req.user.userId);
     const visitHistory = new Map(
       history.rows.map((row) => [normalizeMerchantText(row.merchant_name), Number(row.visit_count)]),
@@ -214,10 +191,7 @@ exports.getFoodRecommendations = async (req, res) => {
 
     const ranked = filtered.sort((a, b) => b.score - a.score).slice(0, 20);
 
-    // A photo lookup failure shouldn't fail the recommendations themselves
-    // — enrichWithPhotos already resolves each venue to photoUrl: null on
-    // any per-venue error, but guard the whole pass too in case Google is
-    // unconfigured/unreachable in a way that throws before that.
+    // Guard the whole enrichment pass too, in case Google is unconfigured/unreachable in a way that throws before per-venue error handling kicks in.
     let enriched = ranked;
     try {
       enriched = await enrichWithPhotos(ranked, { radiusM });
@@ -259,10 +233,7 @@ exports.getFoodRecommendations = async (req, res) => {
   }
 };
 
-// GET /api/recommendations/food/venues/:provider/:providerPlaceId —
-// cache-or-fetch detail lookup, dispatched to whichever provider originally
-// sourced the venue. Lazy: a cache row only exists for venues someone has
-// actually opened before, not every venue a search ever returned.
+// GET /api/recommendations/food/venues/:provider/:providerPlaceId — cache-or-fetch, lazy: a cache row only exists once a venue's been opened.
 exports.getVenueDetail = async (req, res) => {
   const { provider, providerPlaceId } = req.params;
 
@@ -309,16 +280,7 @@ exports.getVenueDetail = async (req, res) => {
   }
 };
 
-// GET /api/recommendations/food/photo/:api/:photoReference — proxies the
-// actual photo bytes rather than handing the client a Google URL with the
-// API key embedded in it (every other provider key in this app stays
-// backend-only; this keeps that rule intact — see plan). Cache-or-fetch
-// against photo_cache first: the venue_cache/photo_reference lookup is
-// already shared across all users, but without this second cache, every
-// fresh Image.network() load (different device, or same device after its
-// local cache clears) would re-bill Google for bytes we've already fetched
-// once. Cache-Control still set for the client-side case this doesn't cover
-// (same device, same session, no repeat network request at all).
+// Proxies photo bytes instead of handing the client a Google URL with the API key embedded (keeps provider keys backend-only); photo_cache avoids re-billing Google every time a fresh device/session re-requests the same photo.
 exports.getVenuePhoto = async (req, res) => {
   const { api, photoReference } = req.params;
 

@@ -17,9 +17,7 @@ exports.distanceMeters = (lat1, lng1, lat2, lng2) => {
   return EARTH_RADIUS_M * c;
 };
 
-// Hard spatial filter — keeps only venues within radiusM of (lat, lng),
-// and fills in distanceM via Haversine for any venue Foursquare didn't
-// already annotate with its own distance.
+// Hard spatial filter — keeps venues within radiusM, filling in distanceM via Haversine when Foursquare didn't provide it.
 exports.filterWithinRadius = (venues, { lat, lng }, radiusM) => {
   return venues
     .map((venue) => {
@@ -32,12 +30,7 @@ exports.filterWithinRadius = (venues, { lat, lng }, radiusM) => {
     .filter((venue) => venue.distanceM <= radiusM);
 };
 
-// Composition layer between recommendation.service.js and the provider
-// pipeline in config/maps.js: `query`/`options` arrive already assembled
-// (from config/dining.js + request params) and are passed straight through
-// — this file adds no defaults and reads no env itself, it only threads
-// what it's given down to searchVenues, then applies the radius filter to
-// whatever the pipeline returned.
+// Thin composition layer over config/maps.js: passes query/options through as-is, then applies the radius filter.
 exports.findNearbyVenues = async (query, options) => {
   const { venues: rawVenues, providerStatus } = await mapsConfig.searchVenues(query, options);
   const venues = exports.filterWithinRadius(rawVenues, { lat: query.lat, lng: query.lng }, query.radiusM);

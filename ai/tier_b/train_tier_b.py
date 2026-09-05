@@ -1,44 +1,31 @@
-"""Trains the Tier B (variable/discretionary spend) regressor described in
-predictive_budgeting_engine_summary.md. Runs on-device (TFLite, inside the
-Flutter app) rather than server-side — see
-front-end/lib/services/tier_b_inference_service.dart.
+"""Trains the Tier B (variable/discretionary spend) regressor from
+predictive_budgeting_engine_summary.md. Runs on-device via TFLite inside
+the Flutter app - see front-end/lib/services/tier_b_inference_service.dart.
 
-Trains on ai/data/processed/tier_b_training_data.csv (produced by
-prepare_tier_b_data.py from the real Berka dataset) if it exists; otherwise
-falls back to synthetic Faker-generated personas so this still runs before
-you've downloaded/prepared real data.
+Uses ai/data/processed/tier_b_training_data.csv (from prepare_tier_b_data.py)
+if it exists, otherwise falls back to synthetic Faker-generated personas.
 
-Every feature and the target are RATIOS relative to a 90-day trailing
-baseline, not absolute currency amounts — see the FEATURE_COLUMNS comment in
-prepare_tier_b_data.py for why (Berka is 1990s Czech koruna; this app's
-users spend in Malaysian ringgit, and a model trained to predict an
-absolute amount in one currency/scale would be meaningless applied to
-another).
+Everything's a ratio vs a 90-day trailing baseline, not a raw amount - see
+the FEATURE_COLUMNS note in prepare_tier_b_data.py for why. Target is the
+whole remaining month's spend, so one inference call replaces the old
+day-by-day walk-forward loop.
 
-The target is the WHOLE REMAINING MONTH's spend (as of a given day), not a
-single day's — so a single inference call replaces the old day-by-day
-walk-forward loop.
-
-NOTE on scope: an earlier version of this script predicted three quantiles
-(p10/p50/p90) for an uncertainty range instead of one point estimate. That
-was reverted after repeated real calibration failures during debugging
-(clip-ceiling censoring, then quantile crossing, then the shared "base"
-term collapsing p10 toward p50 under a monotonicity constraint) — each was
-a genuine bug, fixed in turn, but quantile regression via this small
-shared-trunk network kept finding new ways to miscalibrate. Rather than
-keep iterating indefinitely, this fell back to the single-point-estimate
-design that was already verified working end-to-end. Uncertainty
-estimation is back on the list of things to solve properly, later.
+Note: an earlier version predicted p10/p50/p90 quantiles for an uncertainty
+range instead of a single point estimate. Dropped it after a few rounds of
+calibration bugs (clip-ceiling censoring, quantile crossing, a shared "base"
+term collapsing p10 toward p50) - each got fixed, but this small
+shared-trunk network kept finding new ways to miscalibrate, so it went back
+to the single-point-estimate design that already worked end-to-end.
+Uncertainty estimation is still on the list, just not solved yet.
 
 Usage:
     pip install -r requirements.txt
-    python prepare_tier_b_data.py   # optional — only if you've downloaded Berka
+    python prepare_tier_b_data.py   # optional - only if you've downloaded Berka
     python train_tier_b.py
 
-Re-run any time you want to retrain (see also schedule_retrain.ps1 for
-automating this). Rebuild the Flutter app afterward so it bundles the newly
-saved .tflite file as its offline default — or rely on the OTA download path
-(tier_b_inference_service.dart) to pick it up without a rebuild.
+Re-run any time to retrain (see schedule_retrain.ps1). Rebuild the Flutter
+app afterward to bundle the new .tflite as its offline default, or just let
+the OTA download path (tier_b_inference_service.dart) pick it up.
 """
 
 from pathlib import Path
@@ -52,9 +39,7 @@ from sklearn.model_selection import train_test_split
 
 PROCESSED_DATA_PATH = Path(__file__).parent.parent / "data" / "processed" / "tier_b_training_data.csv"
 
-# Saved to both: ai/models/ is the versioned source of truth (also what the
-# backend serves for OTA downloads — see insight.routes.js), front-end/assets/
-# is the bundled offline-default copy Flutter ships inside the app itself.
+# ai/models/ is the versioned source (also what the backend serves for OTA - see insight.routes.js); front-end/assets/ is the bundled offline-default copy.
 MODEL_OUTPUT_PATHS = [
     Path(__file__).parent.parent / "models" / "tier_b_regressor.tflite",
     Path(__file__).parent.parent.parent / "front-end" / "assets" / "models" / "tier_b_regressor.tflite",
@@ -63,10 +48,7 @@ MODEL_OUTPUT_PATHS = [
 DAYS_PER_PERSONA = 200
 MIN_BASELINE_FLOOR = 1.0
 
-# Ceilings picked from real Berka percentiles (checked directly, not
-# guessed): the unclipped 90th percentile of remaining_month_ratio is ~38
-# and the 99th is ~110, so an earlier ceiling of 30 was clipping away the
-# top ~10%+ of the real distribution.
+# Ceilings from real Berka percentiles (p90 ~38, p99 ~110) - an earlier ceiling of 30 was clipping away the top 10%+.
 ROLL_RATIO_CLIP_MAX = 15.0
 TARGET_RATIO_CLIP_MAX = 150.0
 
@@ -93,16 +75,13 @@ FEATURE_COLUMNS = [
 ]
 TARGET_COLUMN = "remaining_month_ratio"
 
-# Reused for the synthetic fallback path too, for consistency with the real
-# (Berka/Czech) path — it's just a stand-in feature either way (see
-# prepare_tier_b_data.py's FEATURE_COLUMNS comment).
+# Reused for the synthetic path too for consistency with the real one - it's just a stand-in feature either way.
 _SYNTHETIC_HOLIDAYS = sorted(holidays.CZ(years=range(2024, 2027)).keys())
 _HOLIDAY_DATES = np.array(_SYNTHETIC_HOLIDAYS, dtype="datetime64[D]")
 
 
 def days_since_payday(d):
-    # Synthetic proxy: this app has no real income/payday data, so paydays
-    # are assumed to land on the 1st and 15th of the month.
+    # Synthetic proxy: no real income/payday data, so paydays are assumed to land on the 1st and 15th.
     return min(abs(d.day - 1), abs(d.day - 15))
 
 
@@ -224,23 +203,10 @@ def main():
     split_idx = int(len(data) * 0.8)
     train, test = data.iloc[:split_idx], data.iloc[split_idx:]
 
-    # remaining_month_ratio is heavily right-skewed (median ~5.5, but a
-    # legitimate tail out to 150) — log1p compresses that range into
-    # something the network can fit smoothly. Predictions are converted
-    # back via expm1 (see below and tier_b_inference_service.dart, which
-    # must do the same on-device).
+    # remaining_month_ratio is heavily right-skewed (median ~5.5, tail to 150) - log1p compresses it so the network fits smoothly; converted back via expm1 below (tier_b_inference_service.dart must match this on-device).
     log_train_target = np.log1p(train[TARGET_COLUMN].to_numpy())
 
-    # Random (not Keras' default unshuffled-last-10%) validation split.
-    # `data` is globally time-sorted across ~4300 accounts, so an unshuffled
-    # suffix is a narrow, non-representative slice (whichever accounts
-    # happen to have late timestamps) rather than a real sample of the
-    # training distribution — every earlier attempt at this model showed
-    # val_loss looking great for ~2 epochs then climbing immediately after,
-    # regardless of architecture, which pointed at the validation split
-    # itself, not the model. The held-out TEST set above stays chronological
-    # (it must, to genuinely test "the future"); only this inner train/val
-    # split is shuffled.
+    # Shuffled validation split (not Keras' default unshuffled last 10%) - data is time-sorted across ~4300 accounts, so an unshuffled slice made val_loss look great for a couple epochs then blow up regardless of architecture. The outer TEST split above stays chronological; only this inner one is shuffled.
     train_features, val_features, train_target, val_target = train_test_split(
         train[FEATURE_COLUMNS].to_numpy(), log_train_target, test_size=0.1, random_state=42
     )
@@ -250,10 +216,7 @@ def main():
         train_features,
         train_target,
         epochs=80,
-        # A large batch size keeps steps/epoch reasonable regardless of
-        # dataset size (real Berka-derived data is ~5M rows; synthetic is
-        # ~500) — early stopping cuts training short once validation loss
-        # stops improving.
+        # Large batch size keeps steps/epoch reasonable whether training on ~5M real rows or ~500 synthetic ones; early stopping handles the rest.
         batch_size=2048,
         validation_data=(val_features, val_target),
         callbacks=[tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True)],

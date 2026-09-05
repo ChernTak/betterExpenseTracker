@@ -86,7 +86,7 @@ class MyApp extends StatelessWidget {
           behavior: SnackBarBehavior.floating,
         ),
       ),
-      initialRoute: AppRoutes.login,
+      initialRoute: AppRoutes.splash,
       routes: AppRoutes.routes,
     );
   }

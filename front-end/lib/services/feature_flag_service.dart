@@ -19,6 +19,10 @@ class FeatureFlagService {
   static const _lastCheckedKey = 'feature_flag_last_checked';
   static const _checkInterval = Duration(days: 1);
 
+  final http.Client _client;
+
+  FeatureFlagService({http.Client? client}) : _client = client ?? http.Client();
+
   Future<bool> isVoiceHandsFreeEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     await _maybeRefresh(prefs);
@@ -34,7 +38,7 @@ class FeatureFlagService {
     }
 
     try {
-      final response = await http
+      final response = await _client
           .get(Uri.parse(ApiEndpoints.configFeatureFlags()))
           .timeout(const Duration(seconds: 5));
       if (response.statusCode != 200) return;

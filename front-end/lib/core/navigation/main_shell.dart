@@ -351,7 +351,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           children: [
             const GuideScreen(),
             const BudgetsScreen(),
-            AddExpenseScreen(onSaved: _goToGuide),
+            AddExpenseScreen(onSaved: _goToGuide, voiceController: _voiceController),
             const FoodRecommendationScreen(),
             const ProfileScreen(),
           ],

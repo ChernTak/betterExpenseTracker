@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:vosk_flutter_2/vosk_flutter_2.dart' show MicrophoneAccessDeniedException;
 
 import '../../../../services/auto_categorization_service.dart';
 import '../../../../services/expense_nlp_parser_service.dart';
+import '../../../../services/voice_audio_feedback_service.dart';
 import '../../../../services/voice_expense_sync_service.dart';
 import '../../../../services/wake_word_service.dart';
 import '../../data/datasources/pending_voice_expense_dao.dart';
+import '../../data/datasources/voice_diagnostic_log_dao.dart';
 import '../../data/datasources/voice_datasource.dart';
 
 enum VoiceCaptureStatus {
@@ -37,26 +40,32 @@ enum VoiceCaptureStatus {
 /// then call [confirmSave] or [cancelPending].
 class VoiceCaptureController extends ChangeNotifier {
   final WakeWordService _wakeWordService;
-  final VoiceDatasource _voiceDatasource;
+  final VoiceDatasource _transcriptionService;
   final ExpenseNlpParserService _parser;
   final AutoCategorizationService _autoCategorizationService;
   final PendingVoiceExpenseDao _outbox;
   final VoiceExpenseSyncService _syncService;
+  final VoiceAudioFeedbackService _audioFeedback;
+  final VoiceDiagnosticLogDao _diagnostics;
 
   VoiceCaptureController({
     WakeWordService? wakeWordService,
-    VoiceDatasource? voiceDatasource,
+    VoiceDatasource? transcriptionService,
     ExpenseNlpParserService? parser,
     AutoCategorizationService? autoCategorizationService,
     PendingVoiceExpenseDao? outbox,
     VoiceExpenseSyncService? syncService,
+    VoiceAudioFeedbackService? audioFeedback,
+    VoiceDiagnosticLogDao? diagnostics,
   }) : _wakeWordService = wakeWordService ?? WakeWordService(),
-       _voiceDatasource = voiceDatasource ?? VoiceDatasource(),
+       _transcriptionService = transcriptionService ?? VoiceDatasource(),
        _parser = parser ?? ExpenseNlpParserService(),
        _autoCategorizationService =
            autoCategorizationService ?? AutoCategorizationService(),
        _outbox = outbox ?? PendingVoiceExpenseDao(),
-       _syncService = syncService ?? VoiceExpenseSyncService();
+       _syncService = syncService ?? VoiceExpenseSyncService(),
+       _audioFeedback = audioFeedback ?? VoiceAudioFeedbackService(),
+       _diagnostics = diagnostics ?? VoiceDiagnosticLogDao();
 
   VoiceCaptureStatus status = VoiceCaptureStatus.idle;
   ParsedVoiceExpense? lastParsed;
@@ -106,13 +115,46 @@ class VoiceCaptureController extends ChangeNotifier {
   }
 
   Future<void> _onWakeWordDetected() async {
-    // Both engines need exclusive mic access — release Vosk's stream before
-    // speech_to_text tries to acquire it.
+    // The only feedback a "hands-free" feature can give someone not looking
+    // at the screen — haptic for a bag/pocket, a chime for anyone in
+    // earshot. Fired together, immediately, so there's no ambiguity about
+    // whether "Ok App" actually registered before they start talking.
+    unawaited(HapticFeedback.mediumImpact());
+    unawaited(_audioFeedback.playWake());
+    // Every detection is logged before we even know the outcome — this is
+    // what lets the "Wake accuracy" summary (Profile > Support) measure how
+    // often "Ok App" triggers without ever producing a saved expense
+    // (background chatter, TV, etc.), instead of guessing at a false-positive rate.
+    unawaited(_diagnostics.log('wake_detected'));
+
+    // WakeWordService (Vosk, always-on grammar-restricted listening) and
+    // _transcriptionService (VoiceDatasource/speech_to_text — Android's own
+    // SpeechRecognizer, chosen over Vosk's open-vocabulary mode here for
+    // accuracy; see VoiceDatasource's doc comment) are two independent
+    // microphone consumers — only one may hold it at a time.
+    // WakeWordService.stop() already pads this handoff to dodge a real
+    // native crash in vosk_flutter_2 (see its doc comment); the try/catch
+    // below is defense-in-depth for whatever that padding doesn't cover —
+    // an exception here would otherwise propagate out of this callback
+    // uncaught (it's invoked from inside WakeWordService's own stream
+    // listener), so this is the difference between "didn't catch that, try
+    // again" and the whole app going down.
     await _wakeWordService.stop();
     _setStatus(VoiceCaptureStatus.transcribing);
 
-    final transcript = await _voiceDatasource.listenOnce();
+    String? transcript;
+    try {
+      transcript = await _transcriptionService.listenOnce();
+    } catch (e) {
+      unawaited(_audioFeedback.playError());
+      unawaited(_diagnostics.log('transcription_error', detail: e.toString()));
+      _setStatus(VoiceCaptureStatus.noSpeechDetected);
+      await _resumeListeningIfActive();
+      return;
+    }
     if (transcript == null || transcript.trim().isEmpty) {
+      unawaited(_audioFeedback.playError());
+      unawaited(_diagnostics.log('no_speech_detected'));
       _setStatus(VoiceCaptureStatus.noSpeechDetected);
       await _resumeListeningIfActive();
       return;
@@ -126,6 +168,10 @@ class VoiceCaptureController extends ChangeNotifier {
     );
     lastParsed = parsed;
 
+    if (!parsed.hasAmount) {
+      unawaited(_audioFeedback.playError());
+      unawaited(_diagnostics.log('parse_failed', detail: transcript));
+    }
     _setStatus(
       parsed.hasAmount
           ? VoiceCaptureStatus.parsed
@@ -152,6 +198,8 @@ class VoiceCaptureController extends ChangeNotifier {
       rawTranscript: transcript,
     );
     unawaited(_syncService.flushPending());
+    unawaited(_audioFeedback.playSuccess());
+    unawaited(_diagnostics.log('saved', detail: transcript));
 
     lastParsed = null;
     lastCategorySuggestion = null;
@@ -159,6 +207,7 @@ class VoiceCaptureController extends ChangeNotifier {
   }
 
   Future<void> cancelPending() async {
+    unawaited(_diagnostics.log('discarded', detail: lastParsed?.rawTranscript));
     lastParsed = null;
     lastCategorySuggestion = null;
     await _resumeListeningIfActive();
@@ -178,7 +227,7 @@ class VoiceCaptureController extends ChangeNotifier {
   @override
   void dispose() {
     _wakeWordService.dispose();
-    _voiceDatasource.dispose();
+    _transcriptionService.dispose();
     super.dispose();
   }
 }

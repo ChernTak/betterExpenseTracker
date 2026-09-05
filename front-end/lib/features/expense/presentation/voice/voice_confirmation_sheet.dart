@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -20,11 +22,13 @@ class VoiceConfirmationSheet extends StatefulWidget {
     BuildContext context,
     VoiceCaptureController controller,
   ) {
+    // Dismissible/draggable so a wake word firing mid-task on another
+    // screen doesn't hijack it with a sheet the user can't get rid of —
+    // swiping it away or tapping the backdrop is treated the same as
+    // Discard (see _VoiceConfirmationSheetState.dispose).
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
       builder: (_) => VoiceConfirmationSheet(controller: controller),
     );
   }
@@ -39,6 +43,14 @@ class _VoiceConfirmationSheetState extends State<VoiceConfirmationSheet> {
   late String _category;
   late DateTime _transactionDate;
   bool _isSaving = false;
+
+  // Set right before Save/Discard hand off to the controller and pop this
+  // sheet themselves. If the sheet closes any other way — swipe-down,
+  // backdrop tap, now that show() allows both — this stays false and
+  // dispose() below treats it as an implicit Discard, so the controller's
+  // state machine never gets stuck waiting for a resolution that isn't
+  // coming and hands-free listening actually resumes.
+  bool _resolved = false;
 
   @override
   void initState() {
@@ -55,6 +67,12 @@ class _VoiceConfirmationSheetState extends State<VoiceConfirmationSheet> {
 
   @override
   void dispose() {
+    if (!_resolved) {
+      // Swiped away or dismissed via the backdrop rather than Save/Discard
+      // — the controller still needs to clear lastParsed/lastCategorySuggestion
+      // and resume hands-free listening, same as an explicit Discard.
+      unawaited(widget.controller.cancelPending());
+    }
     _amountController.dispose();
     _merchantController.dispose();
     super.dispose();
@@ -75,19 +93,35 @@ class _VoiceConfirmationSheetState extends State<VoiceConfirmationSheet> {
     if (amount == null || amount <= 0) return;
 
     setState(() => _isSaving = true);
-    await widget.controller.confirmSave(
-      amount: amount,
-      category: _category,
-      merchantName: _merchantController.text.trim().isEmpty
-          ? null
-          : _merchantController.text.trim(),
-      transactionDate: _transactionDate,
-    );
+    try {
+      await widget.controller.confirmSave(
+        amount: amount,
+        category: _category,
+        merchantName: _merchantController.text.trim().isEmpty
+            ? null
+            : _merchantController.text.trim(),
+        transactionDate: _transactionDate,
+      );
+    } catch (e) {
+      // Leave _resolved false so dispose()'s implicit-cancel safety net
+      // still fires if the user gives up and swipes the sheet away instead
+      // of retrying.
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save expense: $e')),
+        );
+      }
+      return;
+    }
+
+    _resolved = true;
     notifyExpenseDataChanged();
     if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _handleCancel() async {
+    _resolved = true;
     await widget.controller.cancelPending();
     if (mounted) Navigator.of(context).pop();
   }

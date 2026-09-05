@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'core/navigation/main_shell.dart';
 import 'features/admin/presentation/screens/admin_users_screen.dart';
 import 'features/expense/presentation/screens/expense_list_screen.dart';
+import 'features/auth/presentation/screens/auth_gate_screen.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 
 class AppRoutes {
+  // The app's actual initial route (see app.dart) — resolves Remember Me
+  // before sending the user on to login/main/admin.
+  static const String splash = '/';
   static const String login = '/login';
   static const String main = '/main';
   static const String expenses = '/expenses';
@@ -14,6 +18,7 @@ class AppRoutes {
   static const String admin = '/admin';
 
   static final Map<String, WidgetBuilder> routes = {
+    splash: (context) => const AuthGateScreen(),
     login: (context) => const LoginScreen(),
     main: (context) => const MainShell(),
     expenses: (context) => const ExpenseListScreen(),

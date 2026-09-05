@@ -12,6 +12,14 @@ import 'package:vosk_flutter_2/vosk_flutter_2.dart';
 /// copy on every later call. This class only adds a clearer error message
 /// pointing at the manual-download step when that asset is missing.
 class VoiceModelProvisioner {
+  // Tried en-us-0.22-lgraph (~128MB) on 2026-09-05/06 to fix the small
+  // model's poor vocabulary accuracy (e.g. "twenty ringgit" -> "the ring
+  // it") — reverted after on-device testing: the lgraph model pushed CPU to
+  // 90-160%+ and RAM to ~850MB on a Pixel 9a, and produced zero transcripts
+  // across five clean attempts (vs. a working, if imperfect, transcript on
+  // essentially the first attempt with this small model). It's too heavy to
+  // decode in real time on this hardware — worse than low accuracy is no
+  // result at all. Back to the small model.
   static const _assetZipPath = 'assets/models/vosk-model-small-en-us-0.15.zip';
 
   final ModelLoader _modelLoader;

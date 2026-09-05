@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 
 import 'package:vosk_flutter_2/vosk_flutter_2.dart';
 
-import 'voice_model_provisioner.dart';
+import 'vosk_model_registry.dart';
 
 /// Thrown by [WakeWordService.start] on a platform vosk_flutter_2 has no
 /// implementation for. Its pubspec.yaml only declares an `android` plugin
@@ -27,15 +27,22 @@ class WakeWordUnsupportedPlatformException implements Exception {
 /// else). Restricting the grammar instead of decoding against the full
 /// ~40MB language model is what keeps this cheap enough to run
 /// continuously — it also means this recognizer is only ever good for
-/// detecting the wake phrase, never for open transcription (see
-/// VoiceDatasource for that, which takes over once the wake word fires).
+/// detecting the wake phrase, never for open transcription. Once "Ok App"
+/// fires, the actual expense sentence is captured by VoiceDatasource
+/// (Android/iOS's own on-device SpeechRecognizer/SFSpeechRecognizer via the
+/// speech_to_text package) instead of Vosk — tried Vosk's open-vocabulary
+/// mode for that too (2026-09-05/06) and reverted it: small Vosk models
+/// badly mangled vocabulary outside their training set (loanwords like
+/// "ringgit"), and the one bigger model tried was too CPU-heavy to decode
+/// in real time on a Pixel 9a. See VoiceDatasource's doc comment.
 ///
 /// Platform scope, both deliberate:
 /// - **Android only.** vosk_flutter_2 has no iOS implementation (its
 ///   pubspec.yaml declares only an `android` plugin entry) — [start] throws
 ///   [WakeWordUnsupportedPlatformException] on any other platform. iOS users
-///   get the Voice tap-to-talk button on the Input screen instead
-///   (VoiceDatasource, via speech_to_text, which does support iOS).
+///   get the Voice tap-to-talk button on the Input screen instead — it never
+///   needed Vosk in the first place, since transcription is VoiceDatasource
+///   on both platforms.
 /// - **Foreground-process-lifetime only**, even on Android — this
 ///   deliberately does NOT run as a foreground service to survive
 ///   indefinite screen-off/backgrounding, since that requires a background
@@ -53,17 +60,10 @@ class WakeWordService {
   static const _wakePhrase = 'ok app';
   static const _grammar = [_wakePhrase, '[unk]'];
 
-  final VoiceModelProvisioner _modelProvisioner;
-  VoskFlutterPlugin? _vosk;
-
-  Model? _model;
   Recognizer? _recognizer;
   SpeechService? _speechService;
   StreamSubscription<String>? _resultSubscription;
   bool _listening = false;
-
-  WakeWordService({VoiceModelProvisioner? modelProvisioner})
-    : _modelProvisioner = modelProvisioner ?? VoiceModelProvisioner();
 
   bool get isListening => _listening;
 
@@ -76,11 +76,13 @@ class WakeWordService {
     // uncatchable-by-type UnsupportedError on other platforms.
     if (!Platform.isAndroid) throw WakeWordUnsupportedPlatformException();
 
-    final modelPath = await _modelProvisioner.ensureModelExtracted();
-    final vosk = _vosk ??= VoskFlutterPlugin.instance();
-    _model = await vosk.createModel(modelPath);
+    // Cached by VoskModelRegistry so repeated stop/start cycles across a
+    // session (every wake-word handoff resumes this) don't reload the
+    // ~40MB native model from scratch each time.
+    final model = await VoskModelRegistry.ensureLoaded();
+    final vosk = VoskFlutterPlugin.instance();
     _recognizer = await vosk.createRecognizer(
-      model: _model!,
+      model: model,
       sampleRate: _sampleRate,
       grammar: _grammar,
     );
@@ -91,12 +93,16 @@ class WakeWordService {
   /// [onWakeWordDetected] fires once per detected "ok app" utterance;
   /// listening continues afterwards, so a caller handing off to full
   /// transcription must call [stop] itself from inside the callback to
-  /// release the microphone before starting TranscriptionService.
+  /// release the microphone before starting VoiceDatasource's listen.
   Future<void> start(void Function() onWakeWordDetected) async {
     await _ensureInitialized();
     if (_listening) return;
 
-    _resultSubscription ??= _speechService!.onResult().listen((resultJson) {
+    // Always a fresh subscription, not `??=` — [stop] disposes and nulls
+    // _speechService (see its doc comment for why), so _ensureInitialized
+    // creates a brand new one on every resume and any old subscription
+    // would be listening to an already-disposed stream.
+    _resultSubscription = _speechService!.onResult().listen((resultJson) {
       if (_extractText(resultJson) == _wakePhrase) onWakeWordDetected();
     });
 
@@ -104,25 +110,57 @@ class WakeWordService {
     _listening = true;
   }
 
-  /// Stops listening and releases the microphone. Both OSes only allow one
-  /// consumer of the mic at a time, so this must complete before
-  /// TranscriptionService starts, and callers should call [start] again
-  /// once transcription finishes to resume hands-free listening.
+  /// Stops listening and fully releases both the microphone and the
+  /// underlying native SpeechService. Both OSes only allow one consumer of
+  /// the mic at a time, so this must complete before VoiceDatasource starts
+  /// its own listen, and callers should call [start] again once
+  /// transcription finishes to resume hands-free listening.
+  ///
+  /// This disposes rather than just stopping — confirmed on a physical
+  /// device: vosk_flutter_2's native layer only allows *one* SpeechService
+  /// object to exist at all, globally, so a subsequent [start] call re-uses
+  /// the same native slot. Merely stopping (not disposing) this one and
+  /// then calling [start] again threw `PlatformException(INITIALIZE_FAIL,
+  /// SpeechService instance already exist.)` — the native slot was never
+  /// actually freed. Recognizer creation from an already-loaded Model (see
+  /// VoskModelRegistry) is cheap, so paying that cost on every handoff is
+  /// the correct fix here, not a workaround.
+  ///
+  /// Separately, also confirmed on a physical device (2026-08-28 logcat):
+  /// vosk_flutter_2's native `SpeechService.stop()` returns to Dart before
+  /// its background RecognizerThread has actually finished releasing the
+  /// microphone's AudioRecord. A caller that immediately hands the mic to
+  /// another consumer here can race that teardown and crash the whole
+  /// process: `java.lang.RuntimeException: error reading audio buffer` at
+  /// `SpeechService$RecognizerThread.run`, and separately a SIGSEGV inside
+  /// `libvosk.so`'s `Recognizer::AcceptWaveform`. The fixed delay below is
+  /// a pragmatic settle window for that race, not a real fix — the real fix
+  /// belongs upstream in vosk_flutter_2 itself. 400ms is an untuned,
+  /// conservative guess; shorten it only after confirming on-device that
+  /// the crash doesn't recur.
   Future<void> stop() async {
     if (!_listening) return;
+    await _resultSubscription?.cancel();
+    _resultSubscription = null;
     await _speechService?.stop();
+    await _speechService?.dispose();
+    await _recognizer?.dispose();
+    _speechService = null;
+    _recognizer = null;
     _listening = false;
+    await Future.delayed(const Duration(milliseconds: 400));
   }
 
+  // Note: doesn't dispose the underlying Model — VoskModelRegistry caches
+  // it for the app's whole lifetime, outliving any single recognizer built
+  // from it.
   Future<void> dispose() async {
     await _resultSubscription?.cancel();
     _resultSubscription = null;
     await _speechService?.dispose();
     await _recognizer?.dispose();
-    _model?.dispose();
     _speechService = null;
     _recognizer = null;
-    _model = null;
     _listening = false;
   }
 

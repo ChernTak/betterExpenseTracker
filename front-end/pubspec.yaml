@@ -86,6 +86,10 @@ dependencies:
   # itself off cleanly below API 30 instead of risking an unverified native
   # call into code the plugin never claimed to support there.
   device_info_plus: ^12.4.0
+  # Audible wake/success/error cues (VoiceAudioFeedbackService) — the only
+  # feedback channel besides a haptic buzz for a feature explicitly meant
+  # to be used without looking at the screen.
+  audioplayers: ^6.7.1
 
   # Resize/normalize the receipt photo into the fixed 224x224 pixel_values
   # tensor the on-device receipt NER model (LayoutLMv3) expects — see
@@ -95,6 +99,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Mocks/fakes for VoiceCaptureController's collaborators in the voice
+  # test suite — no code generation, works with plain classes.
+  mocktail: ^1.0.5
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -120,6 +128,10 @@ flutter:
     - assets/models/tier_b_regressor.tflite
     # Manually downloaded — see assets/models/README.md. Not fetched by
     # `pub get`; the app fails to start hands-free listening without it.
+    # Tried vosk-model-en-us-0.22-lgraph (~128MB) on 2026-09-05/06 for
+    # better vocabulary accuracy, reverted: it was too CPU-heavy to decode
+    # in real time on-device (90-160%+ CPU, ~850MB RAM) and produced zero
+    # transcripts across five clean attempts. Back to the small model.
     - assets/models/vosk-model-small-en-us-0.15.zip
     # Receipt NER (LayoutLMv3) tokenizer vocab — small (~1.2MB combined),
     # bundled directly unlike the 153MB .tflite model itself, which is
@@ -129,6 +141,11 @@ flutter:
     # produce wrong token IDs.
     - assets/models/receipt_ner_vocab.json
     - assets/models/receipt_ner_merges.txt
+    # Synthesized wake/success/error tones for hands-free voice logging
+    # (FR4.4) — generated, not recorded; see VoiceAudioFeedbackService.
+    - assets/audio/voice_wake.wav
+    - assets/audio/voice_success.wav
+    - assets/audio/voice_error.wav
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

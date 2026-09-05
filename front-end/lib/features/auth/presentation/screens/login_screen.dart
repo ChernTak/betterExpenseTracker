@@ -32,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLogin = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -49,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final result = await _authService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        rememberMe: _rememberMe,
       );
 
       // FR1.7 — an admin account has no expenses/budgets of its own, so it
@@ -167,12 +169,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature is not available yet — use email and password.')),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -224,37 +220,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('OR CONTINUE WITH', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SecondaryIconButton(
-                        icon: Icons.g_mobiledata,
-                        label: 'Google',
-                        onPressed: () => _showComingSoon('Google sign-in'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _SecondaryIconButton(
-                        icon: Icons.apple,
-                        label: 'Apple',
-                        onPressed: () => _showComingSoon('Apple sign-in'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
                 TextButton(
                   onPressed: _isLoading ? null : _handleGuestLogin,
                   child: const Text('Continue as Guest', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -321,6 +286,27 @@ class _LoginScreenState extends State<LoginScreen> {
           obscureText: _obscurePassword,
           validator: (value) => Validators.validateRequired(value, fieldName: 'Password'),
         ),
+      ),
+      const SizedBox(height: 4),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 24,
+            width: 24,
+            child: Checkbox(
+              value: _rememberMe,
+              onChanged: (value) => setState(() => _rememberMe = value ?? false),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() => _rememberMe = !_rememberMe),
+            child: const Text('Remember me', style: TextStyle(fontSize: 13)),
+          ),
+        ],
       ),
     ];
   }
@@ -420,37 +406,6 @@ class _AuthModeToggle extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryIconButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _SecondaryIconButton({required this.icon, required this.label, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 20, color: AppColors.textPrimary),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-            ],
           ),
         ),
       ),

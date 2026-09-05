@@ -20,6 +20,7 @@ import '../../../../services/receipt_ner/receipt_field_normalizer.dart';
 import '../../../../services/receipt_ner/receipt_ner_service.dart';
 import '../../data/datasources/ocr_datasource.dart';
 import '../../data/datasources/voice_datasource.dart';
+import '../voice/voice_capture_controller.dart';
 
 /// The "Input" tab. Manual, Scan (FR4.2/FR4.3, on-device Google ML Kit text
 /// recognition + backend parsing) and Voice (FR4.4, on-device speech
@@ -27,13 +28,31 @@ import '../../data/datasources/voice_datasource.dart';
 /// are all wired to real capture; Voice here is the tap-to-talk single-shot
 /// path that prefills this form. The separate hands-free "Ok App" wake-word
 /// flow (VoiceCaptureController) runs app-wide from MainShell and shows its
-/// own confirmation sheet instead of routing through this screen.
+/// own confirmation sheet instead of routing through this screen — but it's
+/// still passed in here (see [voiceController]) because it and this
+/// screen's tap-to-talk button are two independent microphone consumers.
 class AddExpenseScreen extends StatefulWidget {
   /// Invoked after a successful save so the shell can switch back to the
   /// Guide tab. Optional so this screen can still be used standalone.
   final VoidCallback? onSaved;
 
-  const AddExpenseScreen({super.key, this.onSaved});
+  /// MainShell's shared hands-free controller, so _handleVoiceInput can
+  /// pause wake-word listening while this screen's own tap-to-talk capture
+  /// is running. Optional so this screen still works standalone (e.g. in a
+  /// test) — without it, tap-to-talk simply can't coordinate with
+  /// hands-free, which is only a problem if hands-free happens to be
+  /// running at the same time.
+  ///
+  /// Confirmed on a physical device: with hands-free left on, tapping Voice
+  /// here silently never reached the native speech recognizer at all —
+  /// Vosk's AudioTrack session kept holding the microphone throughout (only
+  /// one consumer can hold it at a time), so speech_to_text just never got
+  /// anything. This looked identical to "the recognizer doesn't work" from
+  /// the user's side, but was really "the microphone was still owned by
+  /// someone else."
+  final VoiceCaptureController? voiceController;
+
+  const AddExpenseScreen({super.key, this.onSaved, this.voiceController});
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -225,15 +244,32 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
+  Future<String?> _listenOnce() => _voiceDatasource.listenOnce();
+
+  Future<void> _stopListening() => _voiceDatasource.stop();
+
   /// Tap-to-talk voice capture (FR4.4): listens for a single utterance via
-  /// the native on-device speech recognizer, extracts amount/merchant/date
-  /// with ExpenseNlpParserService (pure on-device regex, no network call),
-  /// and prefills this form the same way _handleScanReceipt prefills it
-  /// from OCR — the user still reviews and taps Save themselves.
+  /// on-device speech recognition (see [_listenOnce]), extracts
+  /// amount/merchant/date with ExpenseNlpParserService (pure on-device
+  /// regex, no network call), and prefills this form the same way
+  /// _handleScanReceipt prefills it from OCR — the user still reviews and
+  /// taps Save themselves.
   Future<void> _handleVoiceInput() async {
     setState(() => _inputMode = 'voice');
+
+    // Hands-free wake-word listening and this tap-to-talk capture are two
+    // independent microphone consumers — only one can hold the mic at a
+    // time, so leaving hands-free running here means this capture never
+    // actually gets a turn (see the class doc comment on [voiceController]
+    // for how this was confirmed). Pause it for the duration of this
+    // capture, and only resume it afterward if it was genuinely running
+    // before — never turn it on for a user who had it off.
+    final voiceController = widget.voiceController;
+    final wasHandsFreeActive = voiceController?.isHandsFreeActive ?? false;
+    if (wasHandsFreeActive) await voiceController!.stopHandsFree();
+
     try {
-      final transcript = await _voiceDatasource.listenOnce();
+      final transcript = await _listenOnce();
       if (transcript == null || transcript.trim().isEmpty) {
         throw Exception("Didn't catch that — try again in a quieter spot.");
       }
@@ -268,6 +304,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
+    } finally {
+      if (wasHandsFreeActive) await voiceController!.startHandsFree();
     }
   }
 
@@ -414,6 +452,25 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       _inputMode == 'scan' ? 'Scanning receipt…' : 'Listening… say your expense',
                       style: const TextStyle(color: AppColors.textSecondary),
                     ),
+                    // Scanning has no equivalent — it's a single OCR call
+                    // with no long listening window to cut short. Voice
+                    // otherwise waits out the full listenFor/pauseFor
+                    // timeout on every attempt even after the user's
+                    // already finished talking, which is dead time worth
+                    // letting them skip.
+                    if (_inputMode == 'voice') ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Done talking? Tap Stop instead of waiting.",
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _stopListening,
+                        icon: const Icon(Icons.stop_circle_outlined),
+                        label: const Text('Stop'),
+                      ),
+                    ],
                   ],
                 ),
               )

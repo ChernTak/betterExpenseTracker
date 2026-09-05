@@ -418,6 +418,8 @@ class _MonthPageState extends State<_MonthPage> {
           final data = snapshot.data!;
           final dashboard = data.dashboard;
           final budgets = (dashboard['budgets'] as List<dynamic>? ?? []);
+          final unbudgetedSpend =
+              (dashboard['unbudgetedSpend'] as List<dynamic>? ?? []);
           final totalLimit = (dashboard['totalLimit'] as num?)?.toDouble() ?? 0;
           final totalSpent = (dashboard['totalSpent'] as num?)?.toDouble() ?? 0;
           final goalContributionsThisMonth =
@@ -425,11 +427,29 @@ class _MonthPageState extends State<_MonthPage> {
           final availableToSpend =
               (dashboard['availableToSpend'] as num?)?.toDouble();
 
+          // Merged view for the "top category" insight only — categories
+          // with real spend but no budget row still show up here (as
+          // current_spend with no monthly_limit) so the insight isn't blind
+          // to unbudgeted spending. NOT used by the Monthly Budget card
+          // itself (that stays scoped to `budgets` so its %/remaining match
+          // totalLimit/totalSpent, which only cover budgeted categories) or
+          // by the "Category Budgets" management list below, which treats
+          // every entry as an editable row (budget_id, monthly_limit).
+          final chartEntries = [
+            ...budgets,
+            ...unbudgetedSpend.map(
+              (u) => {
+                'category': (u as Map<String, dynamic>)['category'],
+                'current_spend': u['spent'],
+              },
+            ),
+          ];
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              if (budgets.isNotEmpty) _InsightCard(budgets: budgets),
-              if (budgets.isNotEmpty) const SizedBox(height: 16),
+              if (chartEntries.isNotEmpty) _InsightCard(budgets: chartEntries),
+              if (chartEntries.isNotEmpty) const SizedBox(height: 16),
               _MonthlyBudgetCard(
                 totalLimit: totalLimit,
                 totalSpent: totalSpent,

@@ -153,8 +153,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // real debugging signal when a user reports hands-free "not working":
   // they explicitly review and copy their own local event log, nothing is
   // ever sent automatically.
+  //
+  // limit: 200 matches VoiceDiagnosticLogDao's own retention cap, so this
+  // sees (and the accuracy summary below counts) everything the device
+  // still has, not just a recent slice of it.
   Future<void> _showVoiceDiagnostics() async {
-    final events = await VoiceDiagnosticLogDao().recentEvents(limit: 50);
+    final events = await VoiceDiagnosticLogDao().recentEvents(limit: 200);
     if (!mounted) return;
 
     if (events.isEmpty) {
@@ -166,6 +170,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    final summary = _summarizeWakeAccuracy(events);
     final report = events
         .map((e) {
           final time = DateTime.fromMillisecondsSinceEpoch(
@@ -184,9 +189,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
-            child: Text(
-              report,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (summary != null) ...[
+                  Text(summary, style: const TextStyle(fontSize: 12.5)),
+                  const Divider(height: 20),
+                ],
+                Text(
+                  report,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                ),
+              ],
             ),
           ),
         ),
@@ -197,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           TextButton(
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: report));
+              Clipboard.setData(ClipboardData(text: '${summary ?? ''}\n\n$report'));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -212,6 +227,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  // A proxy, not a lab-measured false-positive rate: there's no ground
+  // truth for "did the user actually mean to say Ok App", only what
+  // happened afterwards. A wake detection that never turns into a saved
+  // expense (no speech heard, couldn't parse an amount, or the user
+  // discarded it) is the closest available signal — background chatter/TV
+  // triggering the grammar would show up here as a wake with no matching
+  // save. Returns null if there's no wake_detected event to summarize yet.
+  String? _summarizeWakeAccuracy(List<Map<String, dynamic>> events) {
+    final counts = <String, int>{};
+    for (final e in events) {
+      final event = e['event'] as String;
+      counts[event] = (counts[event] ?? 0) + 1;
+    }
+
+    final totalWakes = counts['wake_detected'] ?? 0;
+    if (totalWakes == 0) return null;
+
+    final saved = counts['saved'] ?? 0;
+    final notSaved =
+        (counts['no_speech_detected'] ?? 0) +
+        (counts['parse_failed'] ?? 0) +
+        (counts['discarded'] ?? 0);
+    final notSavedPercent = (notSaved / totalWakes * 100).round();
+
+    return 'Wake accuracy (last $totalWakes "Ok App" detections): '
+        '$saved saved, $notSaved did not result in a saved expense '
+        '(~$notSavedPercent%). "Did not result in a save" includes no '
+        'speech heard, an unparseable amount, and manual discards — not '
+        'just false wake-word triggers, so treat this as a rough signal, '
+        'not a precise false-positive rate.';
   }
 
   @override

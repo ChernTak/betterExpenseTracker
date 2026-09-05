@@ -59,28 +59,36 @@ exports.listBudgets = async (req, res) => {
   const targetYear = Number(req.query.year) || year;
 
   try {
-    const result = await budgetModel.getBudgetsForUser(req.user.userId, targetMonth, targetYear);
-    const budgets = result.rows;
-    const totals = budgets.reduce(
-      (acc, b) => ({
-        totalLimit: acc.totalLimit + Number(b.monthly_limit),
-        totalSpent: acc.totalSpent + Number(b.current_spend),
-      }),
-      { totalLimit: 0, totalSpent: 0 },
-    );
-
-    // "Available to spend" — income this month minus what's already
-    // committed to goals minus real total spend (not the budget-scoped
-    // totalSpent above, which silently excludes unbudgeted categories).
-    // Ties the "pay yourself first" (Goals) / "spend what's left"
-    // (Wishlist) framing to an actual number instead of just UI copy.
     const monthStart = new Date(Date.UTC(targetYear, targetMonth - 1, 1));
     const monthEndExclusive = new Date(Date.UTC(targetYear, targetMonth, 1));
-    const [incomeResult, spentResult, contributionsResult] = await Promise.all([
-      incomeModel.getTotalIncomeForMonth(req.user.userId, monthStart, monthEndExclusive),
-      expenseModel.getTotalSpentForMonth(req.user.userId, monthStart, monthEndExclusive),
-      goalModel.getContributionsTotalForMonth(req.user.userId, monthStart, monthEndExclusive),
-    ]);
+
+    const [budgetsResult, incomeResult, spentResult, contributionsResult, categorySpendResult] =
+      await Promise.all([
+        budgetModel.getBudgetsForUser(req.user.userId, targetMonth, targetYear),
+        incomeModel.getTotalIncomeForMonth(req.user.userId, monthStart, monthEndExclusive),
+        expenseModel.getTotalSpentForMonth(req.user.userId, monthStart, monthEndExclusive),
+        goalModel.getContributionsTotalForMonth(req.user.userId, monthStart, monthEndExclusive),
+        expenseModel.getSpendByCategoryForMonth(req.user.userId, monthStart, monthEndExclusive),
+      ]);
+    const budgets = budgetsResult.rows;
+
+    // Categories with real spend this month but no budget row at all — kept
+    // separate from `budgets` (rather than injected into it) because
+    // budgets_screen.dart treats every entry in `budgets` as an editable
+    // budget (casts budget_id/monthly_limit as non-null); the dashboard
+    // (guide_screen.dart) merges this in itself for the spend chart/legend.
+    const budgetedCategories = new Set(budgets.map((b) => b.category));
+    const unbudgetedSpend = categorySpendResult.rows
+      .filter((r) => !budgetedCategories.has(r.category) && Number(r.spent) > 0)
+      .map((r) => ({ category: r.category, spent: Number(r.spent) }));
+
+    const totalLimit = budgets.reduce((sum, b) => sum + Number(b.monthly_limit), 0);
+    // Scoped to budgeted categories only, unlike totalSpentThisMonth below —
+    // otherwise setting a budget for just one category (e.g. Food & Dining)
+    // makes the Monthly Budget card's %/remaining reflect spending in every
+    // other category too, since totalLimit only covers the one you budgeted.
+    const totalSpent = budgets.reduce((sum, b) => sum + Number(b.current_spend), 0);
+
     const totalIncome = Number(incomeResult.rows[0].total);
     const totalSpentThisMonth = Number(spentResult.rows[0].total);
     const goalContributionsThisMonth = Number(contributionsResult.rows[0].total);
@@ -92,9 +100,10 @@ exports.listBudgets = async (req, res) => {
     return res.status(200).json({
       month: targetMonth,
       year: targetYear,
-      totalLimit: totals.totalLimit,
-      totalSpent: totals.totalSpent,
+      totalLimit,
+      totalSpent,
       budgets,
+      unbudgetedSpend,
       totalIncome,
       goalContributionsThisMonth,
       totalSpentThisMonth,

@@ -39,6 +39,20 @@ exports.getTotalSpentForMonth = (userId, monthStart, monthEndExclusive) => {
   return db.query(query, [userId, monthStart, monthEndExclusive]);
 };
 
+// Real per-category spend in [monthStart, monthEndExclusive), regardless of
+// whether the user ever set a budget for that category — lets the dashboard
+// show actual spend for unbudgeted categories instead of silently omitting
+// them (see budget.service.js#listBudgets).
+exports.getSpendByCategoryForMonth = (userId, monthStart, monthEndExclusive) => {
+  const query = `
+    SELECT category, SUM(amount) AS spent
+    FROM expenses
+    WHERE user_id = $1 AND transaction_date >= $2 AND transaction_date < $3
+    GROUP BY category
+  `;
+  return db.query(query, [userId, monthStart, monthEndExclusive]);
+};
+
 exports.getExpenseById = (id, userId, callback) => {
   const query = 'SELECT * FROM expenses WHERE expense_id = $1 AND user_id = $2';
   db.query(query, [id, userId], callback);

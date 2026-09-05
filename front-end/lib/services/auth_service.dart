@@ -23,6 +23,12 @@ class AuthService {
   // account (comparing by role alone was wrong: it hid the buttons on
   // every admin row, not just the logged-in admin's own).
   static const _userIdKey = 'user_id';
+  // Remember Me — whether a persisted session should survive an app
+  // restart. The token itself is always written to secure storage so the
+  // rest of the app can call the API during the current run; this flag is
+  // what AuthGate checks on cold start to decide whether to resume that
+  // session or force the user back to the login screen.
+  static const _rememberMeKey = 'remember_me';
 
   // Shared by login() and continueAsGuest() — both return the same
   // { token, user: { userId, role, ... } } shape on success.
@@ -68,9 +74,14 @@ class AuthService {
   }
 
   /// POST /api/auth/login — saves the JWT token to secure storage on success.
+  ///
+  /// [rememberMe] controls whether AuthGate resumes this session on the next
+  /// cold start (see setRememberMe/hasValidSession below); it doesn't affect
+  /// the token's own validity during the current run.
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
+    bool rememberMe = false,
   }) async {
     try {
       final response = await http.post(
@@ -83,6 +94,7 @@ class AuthService {
 
       if (response.statusCode == 200) {
         await _persistSession(body);
+        await setRememberMe(rememberMe);
         return body;
       } else {
         // Surfaces backend messages like account-locked (423) distinctly,
@@ -107,6 +119,9 @@ class AuthService {
 
       if (response.statusCode == 200) {
         await _persistSession(body);
+        // A guest account is throwaway by design — never resume it across
+        // an app restart, regardless of any earlier Remember Me choice.
+        await setRememberMe(false);
         return body;
       } else {
         throw Exception(body['message'] ?? 'Failed to continue as guest');
@@ -274,6 +289,31 @@ class AuthService {
   Future<bool> isAdmin() async => (await getRole()) == 'admin';
 
   Future<String?> getUserId() => _storage.read(key: _userIdKey);
+
+  Future<void> setRememberMe(bool value) =>
+      _storage.write(key: _rememberMeKey, value: value.toString());
+
+  Future<bool> getRememberMe() async =>
+      (await _storage.read(key: _rememberMeKey)) == 'true';
+
+  /// Called once at app startup by AuthGate. A token is always left in
+  /// secure storage after login so the rest of the app can keep calling the
+  /// API for the current run — this is what decides whether that leftover
+  /// session from a previous run is allowed to resume, or should be wiped
+  /// so the user lands back on the login screen.
+  ///
+  /// login()/continueAsGuest() always write an explicit 'true'/'false' for
+  /// remember_me, but a session written by an app version that predates this
+  /// key has it entirely absent — that's a legacy session, not an opt-out,
+  /// so only an explicit 'false' triggers the wipe.
+  Future<bool> hasValidSession() async {
+    final storedRememberMe = await _storage.read(key: _rememberMeKey);
+    if (storedRememberMe == 'false') {
+      await logout();
+      return false;
+    }
+    return isLoggedIn();
+  }
 
   Future<void> logout() => _storage.deleteAll();
 }
